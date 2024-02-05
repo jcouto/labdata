@@ -9,10 +9,11 @@ from pathlib import Path
 from io import StringIO
 from glob import glob
 from natsort import natsorted
+import hashlib
 
 LABDATA_FILE = Path.home()/Path('labdata')/'user_preferences.json'
 
-default_labdata_preferences = dict(cache_paths = [pjoin(os.path.expanduser('~'),'data')],
+default_labdata_preferences = dict(cache_paths = [str(Path.home()/'data')],
                                    path_rules='{subject}/{session}/{datatype}',
                                    queues= None,
                                    storage = dict(ucla_data = dict(protocol = 's3',
@@ -26,15 +27,15 @@ default_labdata_preferences = dict(cache_paths = [pjoin(os.path.expanduser('~'),
                                        'database.user': None,
                                        'database.password': None,
                                        'database.labdata_schema': 'lab_data'},
-                                   plugins_folder = pjoin(os.path.expanduser('~'),
-                                                          'labdata','analysis'),
+                                   plugins_folder = str(Path.home()/
+                                                        Path('labdata')/'analysis'),
                                    submit_defaults = None,
                                    run_defaults = {'delete-cache':False},
-                                   upload_rules = dict(ephys: dict(
-                                       rule: '*.ap.bin',                 # path format that triggers the rule
-                                       pre: ['compress_ephys_dataset'],  # functions to execute before
-                                       post: ['ingest_ephys_session'],   # function to execute after
-                                       use_queue: 'slurm'))) # whether to use a queue and if so which one
+                                   upload_rules = dict(ephys = dict(
+                                       rule = '*.ap.bin',                 # path format that triggers the rule
+                                       pre = ['compress_ephys_dataset'],  # functions to execute before
+                                       post = ['ingest_ephys_session'],   # function to execute after
+                                       use_queue = 'slurm'))) # whether to use a queue and if so which one
 
 def get_labdata_preferences(prefpath = None):
     ''' Reads the user parameters from the home directory.
@@ -53,15 +54,33 @@ def get_labdata_preferences(prefpath = None):
     if not preffolder.exists():
         preffolder.mkdir(parents=True,exist_ok = True)
     if not prefpath.exists():
-        with open(prefpath, 'w') as outfile:
-            json.dump(default_labdata_preferences, 
-                      outfile, 
-                      sort_keys = True, 
-                      indent = 4)
-            print('Saving default preferences to: ' + prefpath)
+        save_labdata_preferences(default_labdata_preferences, prefpath)
     with open(prefpath, 'r') as infile:
         pref = json.load(infile)
     for k in default_labdata_preferences:
         if not k in pref.keys():
             pref[k] = default_labdata_preferences[k]
     return pref
+
+def save_labdata_preferences(preferences, prefpath):
+    with open(prefpath, 'w') as outfile:
+        json.dump(preferences, 
+                  outfile, 
+                  sort_keys = True, 
+                  indent = 4)    
+        print(f'Saving default preferences to: {prefpath}')
+
+prefs = get_labdata_preferences()
+
+
+##########################################################
+        
+def compute_md5_hash(fname):
+    '''
+    Computes the md5 hash that can be used to check file integrity
+    '''
+    hash_md5 = hashlib.md5()
+    with open(fname, "rb") as f:
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
