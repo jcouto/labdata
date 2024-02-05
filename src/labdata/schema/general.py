@@ -14,12 +14,13 @@ if 'database' in prefs.keys():
         if not prefs['database'][key] is None:
             dj.config[key] = prefs['database'][key]
     if 'gotpass' in dir():
+        # overwrite the preference file (save the datajoint password.)
         save_labdata_preferences(prefs, LABDATA_FILE)                
 
 dataschema = dj.schema(dj.config['database.name'])
 
 @dataschema 
-class Files(dj.Manual):
+class File(dj.Manual):
     definition = '''
     file_path :            varchar(300)  # Path to the file
     storage:               varchar(12)   # storage name 
@@ -124,6 +125,7 @@ class DatasetType(dj.Lookup):
                     'free-behavior',
                     'imaging-2p',
                     'imaging-widefield',
+                    'imaging-miniscope',
                     'ephys',
                     'opto-inactivation',
                     'opto-activation',
@@ -142,21 +144,11 @@ class Dataset(dj.Manual):
     -> [nullable] Setup
     -> [nullable] Note
     """
-    class DataFiles(dj.Part):
+    class DataFiles(dj.Part):  # the files that were acquired on that dataset.
         definition = '''
         -> master
         -> Files
         '''        
-    
-@schema
-class Death(dj.Manual):
-    definition = """
-    -> Subject
-    ---
-    death_date:                  date       # death date
-    death_ts=CURRENT_TIMESTAMP:  timestamp
-    -> [nullable] Note
-    """
 
 @dataschema
 class Note(dj.Manual):
@@ -174,60 +166,10 @@ class Note(dj.Manual):
         image          :  longblob
         caption = NULL : varchar(256)
         """
-        
-@dataschema
-class ProcedureType(dj.Lookup):
-    definition = """
-    procedure_type : varchar(52)       #  Defines procedures that are not an experimental session
-    """
-    contents = zip(['implant',
-                    'injection',
-                    'window replacement',
-                    'handling',
-                    'training',
-                    'craniotomy'])
-    
-@dataschema
-class Procedure(dj.Manual):
-    ''' Surgical or behavioral manipulation. '''
-    definition = """
-    -> Subject
-    -> ProcedureType
-    procedure_date         : date                    # date
-    ---
-    -> LabMember
-    procedure_metadata     : longblob        # other
-    animal_weight=null     : decimal(3,1)    # (g) 
-    -> [nullable] Note
-    """
-
-@dataschema
-class Weighing(dj.Manual):
-    definition = """
-    -> Subject
-    weighing_datetime : datetime
-    ---
-    weight : float  # (g)
-    """
-
-@dataschema
-class Watering(dj.Manual):
-    definition = """
-    -> Subject
-    watering_datetime : datetime
-    ---
-    water_volume : float  # (uL)
-    """
-
-    
-@dataschema
-class WaterRestriction(dj.Manual):
-    definition = """
-    -> Subject
-    water_restriction_start_date : date
-    ---
-    -> LabMember
-    water_restriction_end_date : date
-   -> Weighing
-    """
-
+    class Attachment(dj.Part):
+        definition = """
+        -> Note
+        -> File
+        ---
+        caption = NULL : varchar(256)
+        """
