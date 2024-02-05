@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "labdata"
+authors = [
+  { name="Joao Couto", email="jpcouto@gmail.com" },
+]
+description = "Package to manage data in experimental neuroscience labs"
+readme = "README.md"
+requires-python = ">=3.0"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+	     "minio",
+	     "datajoint",
+]
+dynamic = ["version"]
+
+[project.urls]
+Homepage = "https://github.com/jcouto/labdata"
+Issues = "https://github.com/jcouto/labdata/issues"
+
+#[project.scripts]
+#labdata2 = "labdata.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"] 
+include = ["labdata"]
+namespaces = false  # disable PEP 420 namespaces
+
+[tool.setuptools.dynamic]
+version = {attr = "labdata.VERSION"}
