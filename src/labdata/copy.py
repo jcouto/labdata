@@ -4,9 +4,9 @@ def _copyfile_to_upload_server(filepath, local_path=None, server_path = None,ove
     '''
     This is a support function that will copy data between computers; it will not overwrite, unless forced.
     It will raise an exception if the files are already there unless overwrite is true.
+    Does not insert to the Upload table.
 
-    returns a dictionary
-    
+    Returns a dictionary
     Joao Couto - labdata 2024
     
     '''        
@@ -28,20 +28,21 @@ def _copyfile_to_upload_server(filepath, local_path=None, server_path = None,ove
         raise OSError(f'Could not copy {src} to {dst}.')
     
     return dict(src_path = filepath,
-                checksum_md5 = hash,
+                src_md5 = hash,
                 src_size = file_size,
                 src_datetime = datetime.fromtimestamp(srcstat.st_ctime))
 
 
 def copy_to_upload_server(filepaths, local_path = None, server_path = None,
-                          upload_host = None,
-                          upload_storage = None, overwrite = False, n_jobs = 8):
+                          upload_storage = None, overwrite = False, n_jobs = 8,
+                          **kwargs):
     '''
     Copy data between computers; it will not overwrite, unless forced.
-    It will raise an exception if the files are already there, unless overwrite is true.
 
-    returns a list of dictionaries with the file paths and md5 checksums.
-    
+    Returns a list of dictionaries with the file paths and md5 checksums.
+
+    Inserts in the Upload table. 
+
     Joao Couto - labdata 2024
     '''  
     if local_path is None:  # get the local_path from the preferences
@@ -54,12 +55,6 @@ def copy_to_upload_server(filepaths, local_path = None, server_path = None,
             raise OSError('Upload server path not specified [upload_path], check the preference file.')
     if upload_storage is None: # get the upload_storage name from the preferences
         upload_storage = prefs['upload_storage']
-        if upload_storage is None:
-            raise OSError('Upload storage not specified [upload_storage], check the preference file.')
-    if upload_host is None: # get the upload_host from the preferences
-        upload_host = prefs['upload_host']
-        if upload_host is None:
-            raise OSError('Upload host not specified [upload_host], check the preference file.')
     if not type(filepaths) is list: # Check if the filepaths are in a list
         raise ValueError('Input filepaths must be a list of paths.')
     # replace local_path if the user copied like that by accident.
@@ -75,8 +70,8 @@ def copy_to_upload_server(filepaths, local_path = None, server_path = None,
     # Add it to the upload table
     from .schema import Upload
     res = [dict(r,
-                        upload_storage = upload_storage,
-                        upload_host = upload_host) for r in res]
-    Upload.insert(res) # the upload server will now run the checksum and upload the files.
+                upload_storage = upload_storage,
+                **kwargs) for r in res] # add dataset through kwargs
+    Upload.insert(res, ignore_extra_fields=True) # the upload server will now run the checksum and upload the files.
     return res
     

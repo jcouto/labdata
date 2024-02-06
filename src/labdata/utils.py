@@ -31,17 +31,16 @@ default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],
                                        'database.password': None,
                                        'database.name': 'lab_data'},
                                    plugins_folder = str(Path.home()/
-                                                        Path('labdata')/'analysis'),
+                                                        Path('labdata')/'plugins'),
                                    submit_defaults = None,
                                    run_defaults = {'delete-cache':False},
-                                   upload_path = None,      # this is the path to the local computer that writes to s3
-                                   upload_host = 'hodgkin', # if you are this computer you may process the Upload queue
-                                   upload_storage = 'ucla_data', # where to upload
+                                   upload_path = None,           # this is the path to the local computer that writes to s3
+                                   upload_storage = None,        # which storage to upload to
                                    upload_rules = dict(ephys = dict(
                                        rule = '*.ap.bin',                 # path format that triggers the rule
                                        pre = ['compress_ephys_dataset'],  # functions to execute before
                                        post = ['ingest_ephys_session'],   # function to execute after
-                                       use_queue = 'slurm'))) # whether to use a queue and if so which one
+                                       use_queue = 'slurm')))             # whether to use a queue and if so which one
 
 def get_labdata_preferences(prefpath = None):
     ''' Reads the user parameters from the home directory.
