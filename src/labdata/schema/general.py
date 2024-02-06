@@ -168,7 +168,7 @@ class Upload(dj.Manual):  # add stuff to the upload table that the computer shou
     -> [nullable] Dataset                      # optionally insert to dataset
     '''
 
-    def put(self, key=None, storage_name = None):  # this actually does the upload and checks
+    def put(self, key=None, local_path = None, storage_name = None):  # this actually does the upload and checks
         '''
         Upload data to S3.
         '''
@@ -177,17 +177,21 @@ class Upload(dj.Manual):  # add stuff to the upload table that the computer shou
         else:
             keys = pd.DataFrame((self & key).fetch())
         # split the files by folder; using only one local path
-        localpath = prefs['local_paths'][0]
-        paths = [Path(localpath) / p for p in keys.src_path.values]
+        if local_path is None:
+            assert 'local_paths' in prefs.keys(), ValueError('Preferences need to have "local_paths"')
+            local_path = prefs['local_paths'][0]
+        if storage_name is None:         # get the storage to upload
+            if 'upload_storage' in prefs.keys():
+                storage_name = prefs['upload_storage']
+
+        
+        paths = [Path(local_path) / p for p in keys.src_path.values]
         # get only the paths that exist
         idx = np.where([p.exists() for p in paths])[0]
         keys = keys.iloc[idx]
         paths = [paths[i] for i in idx]
         # get the folder names
         keys['foldername'] = [p.parent for p in paths]
-        if storage_name is None:         # get the storage to upload
-            if 'upload_storage' in prefs.keys():
-                storage_name = prefs['upload_storage']
         # do one folder at a time
         for folder in np.unique(keys['foldername']):
             nk = keys[keys.foldername == folder]
@@ -201,7 +205,7 @@ class Upload(dj.Manual):  # add stuff to the upload table that the computer shou
             # destination in the bucket is actually the path
             dest = [k for k in nk.src_path.values]
             # source is the place where data are
-            src = [Path(localpath) / p for p in nk.src_path.values]
+            src = [Path(local_path) / p for p in nk.src_path.values]
             # hashes are computed
             hashes = [p for p in nk.src_md5.values]
             # s3 copy in parallel
@@ -210,6 +214,7 @@ class Upload(dj.Manual):  # add stuff to the upload table that the computer shou
             with dj.conn().transaction:
                 # insert to File
                 # insert to Dataset.DataFiles
+
                 # delete from Upload
-                [(Upload() & 'src_path = "{0}"'.format(d)).delete(safemode = False) for d in dest]
+                [(Upload() & 'src_path = "{0}"'.format(d.src_path)).delete(safemode = False) for i,d in nk.iterrows()]
         return 
