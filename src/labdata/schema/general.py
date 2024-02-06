@@ -50,7 +50,7 @@ class LabMember(dj.Manual):
     email=null:		                varchar(128)	# email address
     first_name=null:                    varchar(32)	# first name
     last_name=null:	                varchar(32)   	# last name
-    date_joined:	                datetime        # when the user joined the lab
+    date_joined:	                date            # when the user joined the lab
     is_active = 1:                      boolean	        # active or left the lab
     """
 
@@ -66,7 +66,7 @@ class Species(dj.Lookup):
 @dataschema
 class Strain(dj.Lookup):
     definition = """
-    strain_name                : varchar(32)	# strain name
+    strain_name                : varchar(56)	# strain name
     ---
     -> Species
     strain_description=null    : varchar(256)	# description
@@ -103,13 +103,36 @@ class Setup(dj.Lookup):
 """
 
 @dataschema
+class Note(dj.Manual):
+    definition = """
+    -> LabMember
+    note_datetime       : datetime
+    ---
+    notes = ''          : varchar(4000)   # free-text notes
+    """
+    class Image(dj.Part):
+        definition = """
+        -> Note
+        image_id       : int
+        ---
+        image          :  longblob
+        caption = NULL : varchar(256)
+        """
+    class Attachment(dj.Part):
+        definition = """
+        -> Note
+        -> File
+        ---
+        caption = NULL : varchar(256)
+        """
+    
+@dataschema
 class Session(dj.Manual):
     definition = """
     -> Subject
     session                  : varchar(54)     # session identifier
     ---
     session_datetime         : datetime        # experiment date
-    -> DatasetType 
     -> [nullable] LabMember 
     -> [nullable] Setup
     -> [nullable] Note
@@ -129,7 +152,8 @@ class DatasetType(dj.Lookup):
                     'ephys',
                     'opto-inactivation',
                     'opto-activation',
-                    'analysis'])
+                    'analysis',
+                    'unknown'])
 
 @dataschema
 class Dataset(dj.Manual):
@@ -138,8 +162,6 @@ class Dataset(dj.Manual):
     -> Session
     -> DatasetType
     ---
-    session_datetime         : datetime        # experiment date
-    -> DatasetType 
     -> [nullable] LabMember 
     -> [nullable] Setup
     -> [nullable] Note
@@ -147,29 +169,6 @@ class Dataset(dj.Manual):
     class DataFiles(dj.Part):  # the files that were acquired on that dataset.
         definition = '''
         -> master
-        -> Files
+        -> File
         '''        
 
-@dataschema
-class Note(dj.Manual):
-    definition = """
-    -> LabMember
-    -> note_datetime    : data
-    ---
-    notes = ''   : varchar(4000)   # free-text notes
-    """
-    class Image(dj.Part):
-        definition = """
-        -> Note
-        image_id       : int
-        ---
-        image          :  longblob
-        caption = NULL : varchar(256)
-        """
-    class Attachment(dj.Part):
-        definition = """
-        -> Note
-        -> File
-        ---
-        caption = NULL : varchar(256)
-        """

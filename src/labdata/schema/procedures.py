@@ -13,6 +13,15 @@ class ProcedureType(dj.Lookup):
                     'craniotomy'])
     
 @dataschema
+class Weighing(dj.Manual):
+    definition = """
+    -> Subject
+    weighing_datetime : datetime
+    ---
+    weight : float  # (g)
+    """
+
+@dataschema
 class Procedure(dj.Manual):
     ''' Surgical or behavioral manipulation. '''
     definition = """
@@ -24,15 +33,6 @@ class Procedure(dj.Manual):
     procedure_metadata = NULL     : longblob   
     -> [nullable] Weighing
     -> [nullable] Note
-    """
-
-@dataschema
-class Weighing(dj.Manual):
-    definition = """
-    -> Subject
-    weighing_datetime : datetime
-    ---
-    weight : float  # (g)
     """
 
 @dataschema

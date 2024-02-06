@@ -4,16 +4,19 @@ import numpy as np
 import pandas as pd
 
 import json
-import re  # can be removed
+import re  # can be removed?
 from pathlib import Path
 from io import StringIO
 from glob import glob
 from natsort import natsorted
 import hashlib
+from datetime import datetime
+import pathlib
+from joblib import delayed, Parallel
 
 LABDATA_FILE = Path.home()/Path('labdata')/'user_preferences.json'
 
-default_labdata_preferences = dict(cache_paths = [str(Path.home()/'data')],
+default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],
                                    path_rules='{subject}/{session}/{datatype}',
                                    queues= None,
                                    storage = dict(ucla_data = dict(protocol = 's3',
@@ -26,11 +29,14 @@ default_labdata_preferences = dict(cache_paths = [str(Path.home()/'data')],
                                        'database.host':'churchland-ucla-data.cxis684q8epg.us-west-1.rds.amazonaws.com',
                                        'database.user': None,
                                        'database.password': None,
-                                       'database.labdata_schema': 'lab_data'},
+                                       'database.name': 'lab_data'},
                                    plugins_folder = str(Path.home()/
                                                         Path('labdata')/'analysis'),
                                    submit_defaults = None,
                                    run_defaults = {'delete-cache':False},
+                                   upload_path = None,      # this is the path to the local computer that writes to s3
+                                   upload_host = 'hodgkin', # if you are this computer you may process the Upload queue
+                                   upload_storage = 'ucla_data', # where to upload
                                    upload_rules = dict(ephys = dict(
                                        rule = '*.ap.bin',                 # path format that triggers the rule
                                        pre = ['compress_ephys_dataset'],  # functions to execute before
@@ -84,3 +90,4 @@ def compute_md5_hash(fname):
         for chunk in iter(lambda: f.read(4096), b""):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
+
