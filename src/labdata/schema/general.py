@@ -1,8 +1,6 @@
 from ..utils import *
 import datajoint as dj
 
-#with dj.conn().transaction
-
 if 'database' in prefs.keys():
     for key in prefs['database'].keys():
         if prefs['database'][key] is None:
@@ -24,6 +22,16 @@ class File(dj.Manual):
     definition = '''
     file_path                 : varchar(300)  # Path to the file
     storage                   : varchar(12)   # storage name 
+    ---
+    file_datetime             : datetime      # date created
+    file_size                 : double        # using double because int64 does not exist
+    file_md5 = NULL           : varchar(32)   # md5 checksum
+    '''
+# this table stores file name and checksums of files that were sent to upload but were processed by upload rules
+@dataschema
+class ProcessedFile(dj.Manual): 
+    definition = '''
+    file_path                 : varchar(300)  # Path to the file that was processe (these are not in S3)
     ---
     file_datetime             : datetime      # date created
     file_size                 : double        # using double because int64 does not exist
@@ -176,15 +184,18 @@ class Upload(dj.Manual):  # add stuff to the upload table that the computer shou
             keys = pd.DataFrame(self.fetch())
         else:
             keys = pd.DataFrame((self & key).fetch())
-        # split the files by folder; using only one local path
+        # using only one local path; to do: iterate
         if local_path is None:
             assert 'local_paths' in prefs.keys(), ValueError('Preferences need to have "local_paths"')
+            assert type(prefs['local_paths']) is list, ValueError('"local_paths" has to be a list; check preference examples.')
             local_path = prefs['local_paths'][0]
-        if storage_name is None:         # get the storage to upload
+
+        # get the storage to upload
+        if storage_name is None:         
             if 'upload_storage' in prefs.keys():
                 storage_name = prefs['upload_storage']
 
-        
+        # split the files by folder;
         paths = [Path(local_path) / p for p in keys.src_path.values]
         # get only the paths that exist
         idx = np.where([p.exists() for p in paths])[0]
@@ -218,3 +229,19 @@ class Upload(dj.Manual):  # add stuff to the upload table that the computer shou
                 # delete from Upload
                 [(Upload() & 'src_path = "{0}"'.format(d.src_path)).delete(safemode = False) for i,d in nk.iterrows()]
         return 
+
+@dataschema
+class UploadJob(dj.Manual):
+    definition = '''
+    job_id                  : int auto_increment
+    ---
+    job_waiting = 1         : tinyint             # if the job is up for grabs
+    job_status = NULL       : varchar(52)         # status of the job (did it fail?)
+    job_host = NULL         : varchar(52)         # where the job is running
+    job_log = NULL          : varchar(500)        # LOG
+    '''
+    class AssignedFiles(dj.Part):
+        definition = '''
+        -> master
+        -> Upload
+        '''

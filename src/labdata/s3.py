@@ -71,7 +71,7 @@ def copy_to_s3(source_files, destination_files,
                storage = None,
                storage_name = None,
                md5_checksum = None,
-               n_jobs = 8):
+               n_jobs = DEFAULT_N_JOBS):
     '''
     Copy S3 and do a checksum comparisson.
     Copy occurs in parallel for multiple files.

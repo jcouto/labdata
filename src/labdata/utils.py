@@ -15,7 +15,7 @@ import pathlib
 from joblib import delayed, Parallel
 
 LABDATA_FILE = Path.home()/Path('labdata')/'user_preferences.json'
-
+DEFAULT_N_JOBS = 8
 default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],
                                    path_rules='{subject}/{session}/{datatype}',
                                    queues= None,
@@ -65,6 +65,8 @@ def get_labdata_preferences(prefpath = None):
     for k in default_labdata_preferences:
         if not k in pref.keys():
             pref[k] = default_labdata_preferences[k]
+    from socket import gethostname
+    pref['hostname'] = gethostname()
     return pref
 
 def save_labdata_preferences(preferences, prefpath):
@@ -90,3 +92,21 @@ def compute_md5_hash(fname):
             hash_md5.update(chunk)
     return hash_md5.hexdigest()
 
+
+def compute_md5s(filepaths,n_jobs = DEFAULT_N_JOBS):
+    '''
+    Computes the checksums for multiple files in parallel 
+    '''
+    return Parallel(n_jobs = n_jobs)(delayed(compute_md5_hash)(filepath) for filepath in filepaths)
+
+
+def compare_md5s(paths,checksums, n_jobs = DEFAULT_N_JOBS):
+    '''
+    Computes the checksums for multiple files in parallel 
+    '''
+    localchecksums = compute_md5s(paths, n_jobs = n_jobs)
+    res = [False]*len(paths)
+    assert len(paths) == len(checksums), ValueError('Checksums not the same size as paths.')
+    for ipath,(local,check) in enumerate(zip(localchecksums,checksums)):
+        res[ipath] = locall == check
+    return all(res)
