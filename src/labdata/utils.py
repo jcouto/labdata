@@ -14,6 +14,8 @@ from datetime import datetime
 import pathlib
 from joblib import delayed, Parallel
 
+# Look into running on g4dn.2xlarge
+
 LABDATA_FILE = Path.home()/Path('labdata')/'user_preferences.json'
 DEFAULT_N_JOBS = 8
 default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],

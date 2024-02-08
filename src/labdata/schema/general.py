@@ -235,7 +235,7 @@ class UploadJob(dj.Manual):
     definition = '''
     job_id                  : int auto_increment
     ---
-    job_waiting = 1         : tinyint             # if the job is up for grabs
+    job_waiting = 1         : tinyint             # 1 if the job is up for grabs
     job_status = NULL       : varchar(52)         # status of the job (did it fail?)
     job_host = NULL         : varchar(52)         # where the job is running
     job_log = NULL          : varchar(500)        # LOG
@@ -245,3 +245,5 @@ class UploadJob(dj.Manual):
         -> master
         -> Upload
         '''
+
+
