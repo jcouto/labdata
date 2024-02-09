@@ -130,22 +130,13 @@ class Session(dj.Manual):
     session_datetime         : datetime        # experiment date
     -> [nullable] LabMember.proj(experimenter = 'user_name') 
     """
-
+    
 @dataschema
 class DatasetType(dj.Lookup):
     definition = """
     dataset_type: varchar(32)
     """
-    contents = zip(['task-training',
-                    'task-behavior',
-                    'free-behavior',
-                    'imaging-2p',
-                    'imaging-widefield',
-                    'imaging-miniscope',
-                    'ephys',
-                    'opto-inactivation',
-                    'opto-activation',
-                    'analysis'])
+    contents = zip(dataset_type_names)
 
 @dataschema
 class Dataset(dj.Manual):

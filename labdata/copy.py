@@ -45,6 +45,8 @@ def copy_to_upload_server(filepaths, local_path = None, server_path = None,
 
     Joao Couto - labdata 2024
     '''  
+    from .schema import Upload
+
     if local_path is None:  # get the local_path from the preferences
         local_path = prefs['cache_paths'][0]
         if server_path is None:
@@ -61,6 +63,11 @@ def copy_to_upload_server(filepaths, local_path = None, server_path = None,
     filepaths = [str(f).replace(str(local_path),'') for f in filepaths]
     # remove trailing / or \
     filepaths = [f if not f.startswith(pathlib.os.sep) else f[1:] for f in filepaths]
+
+    if any_path_uploaded(filepaths):
+        print('Path was already uploaded {0}'.format(Path(filepaths[0]).parent))
+        return False
+    
     # copy and compute checksum for all paths in parallel.
     res = Parallel(n_jobs = n_jobs)(delayed(_copyfile_to_upload_server)(
         path,
@@ -68,10 +75,26 @@ def copy_to_upload_server(filepaths, local_path = None, server_path = None,
         server_path = server_path,
         overwrite = overwrite) for path in filepaths)
     # Add it to the upload table
-    from .schema import Upload
     res = [dict(r,
                 upload_storage = upload_storage,
                 **kwargs) for r in res] # add dataset through kwargs
     Upload.insert(res, ignore_extra_fields=True) # the upload server will now run the checksum and upload the files.
     return res
-    
+
+def any_path_uploaded(filepaths):
+    '''
+    any_path_uploaded(filepaths)
+
+    Checks if any file was already uploaded or on the upload list
+
+    '''
+    from .schema import Upload, File, ProcessedFile
+    # check if the paths are in "Upload or in Files"
+    for p in filepaths: # if true for any of the filepaths return True
+        if len((File() & f'file_path = "{p}"')) > 0 or len(Upload() & f'src_path = "{p}"' )>0:
+            return True
+        if len((ProcessedFile() & f'file_path = "{p}"'))>0:
+            return True
+    return False # Otherwise return False
+            
+        

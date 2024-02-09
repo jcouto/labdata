@@ -18,8 +18,20 @@ from joblib import delayed, Parallel
 
 LABDATA_FILE = Path.home()/Path('labdata')/'user_preferences.json'
 DEFAULT_N_JOBS = 8
+
+dataset_type_names = ['task-training',
+                      'task-behavior',
+                      'free-behavior',
+                      'imaging-2p',
+                      'imaging-widefield',
+                      'imaging-miniscope',
+                      'ephys',
+                      'opto-inactivation',
+                      'opto-activation',
+                      'analysis']
+
 default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],
-                                   path_rules='{subject}/{session}/{datatype}',
+                                   path_rules='{subject_name}/{session_name}/{dataset_name}', # to read the session/dataset from a path
                                    queues= None,
                                    storage = dict(ucla_data = dict(protocol = 's3',
                                                                    endpoint = 's3.amazonaws.com:9000',

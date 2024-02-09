@@ -24,8 +24,8 @@ dynamic = ["version"]
 Homepage = "https://github.com/jcouto/labdata"
 Issues = "https://github.com/jcouto/labdata/issues"
 
-#[project.scripts]
-#labdata2 = "labdata.cli:main"
+[project.scripts]
+labdata2 = "labdata.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."] 
