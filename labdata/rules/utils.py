@@ -1,4 +1,5 @@
 from ..utils import *
+from ..s3 import copy_to_s3
 
 # has utilities needed by other rules
 
@@ -21,9 +22,9 @@ def check_if_rule_in_path(paths,rule):
 
 
 def check_if_rules_apply(paths,rules = None):
-        '''
+    '''
     Checks if a rule applies to any of the files paths.
-    Returns a list of true/false the same size as paths
+    Returns a list of true/false the same size as paths.
     '''
     if rules is None:
         if 'upload_rules' in prefs.keys():
@@ -40,7 +41,7 @@ def check_if_rules_apply(paths,rules = None):
     return None, [False for f in paths]
 
 class UploadRule():
-    def __init__(paths, checksums = None, use_db = True):
+    def __init__(self,job_id):
         '''
 
 Rule to apply on upload. 
@@ -54,54 +55,108 @@ Rule to apply on upload.
 Can submit job on slurm, some of these can be long or take resources.
 
         '''
-        self.job_id = None
+        self.rule_name = 'default'
+        
+        self.job_id = job_id
         self.src_paths = None
+        self.processed_paths = None
+        self.dst_paths = None
+        self.local_path = prefs['local_paths'][0]
+
         # parse inputs
-        if use_db:
-            from ..schema import UploadJob
-        if not type(paths) is list:
-            # then it is a list of paths
-            if type(paths) is int:
-                # then it is a jobid?
-                self.job_id = paths
-                if not use_db:
-                    raise ValueError('use_db has to be set to input a jobid as path')
-                # get the paths
-                tmp = (UploadJob.AssignedFiles() & dict(job_id = self.job_id)).fetch('src_path','src_md5')
-                paths = [f[0] for f in tmp]
-        else:
-            # get the job_id from the paths
-            if use_db:
-                for path in paths:
-                    query = (UploadJob.AssignedFiles() & dict(src_path = path)).fetch(as_dict = True)
-                    if not len(query):
-                        raise ValueError(f'Could not find {path} in UploadJob.AssignedFiles.')
-                    self.job_id = query[0]['job_id']  # get the job id
-        # check the job status
-        self.src_paths = paths
+        from ..schema import UploadJob, File, dj
+
         if not self.job_id is None:
-            self.jobquery = (UploadJob() & f'job_id = self.job_id')
-            job_status = query.fetch(as_dict = True)[0]
-            if job_status['job_waiting']:
-                self.jobquery.update1(dict(job_waiting = False,
-                                           job_host = pref['hostname'])) # take the job
-            else:
-                print("Job is already taken.")
-                print(job_status, flush = True)
-                return
-                
+            self.jobquery = (UploadJob() & dict(job_id = self.job_id))
+            job_status = self.jobquery.fetch(as_dict = True)
+            if len(job_status):
+                if job_status[0]['job_waiting']:
+                    UploadJob.update1(dict(job_id = self.job_id,
+                                           job_waiting = 0,
+                                           job_status = "WORKING",
+                                           job_host = prefs['hostname'])) # take the job
+                    #print("Reserved job!")
+                else:
+                    print("Job is already taken.")
+                    print(job_status, flush = True)
+                    return # exit.
+        self.upload_storage = self.jobquery.fetch('upload_storage')[0]
+        # get the paths
+        self.src_paths = pd.DataFrame((UploadJob.AssignedFiles() & dict(job_id = self.job_id)).fetch())
+
+        if not len(self.src_paths):
+            UploadJob.update1(dict(job_id = self.job_id,
+                                       job_waiting = 0,
+                                       job_status = "FAILED",
+                                       job_log = f'Could not find files for {self.job_id} in Upload.AssignedFiles.',
+                                       job_host = None)) # add error msg
+            raise ValueError(f'Could not find files for {self.job_id} in Upload.AssignedFiles.')
+        
         # this should not fail because we have to keep track of errors, should update the table
-        if not compare_md5s(paths,checksums):
-            print('CHECKSUM FAILED for {0}'.format(Path(paths[0]).parent))
+        src = [Path(self.local_path) / p for p in self.src_paths.src_path.values] 
+        if not compare_md5s(src,self.src_paths.src_md5.values):
+            print('CHECKSUM FAILED for {0}'.format(Path(self.src_paths.src_path.iloc[0]).parent))
             if not self.job_id is None:
                 # recomputing md5s
-                self.jobquery.update1(dict(job_host = None,
-                                           job_log = 'MD5 CHECKSUM failed; check file transfer.'))
+                UploadJob.update1(dict(job_id = self.job_id,
+                                       job_host = prefs['hostname'], # write the hostname so we know where it failed.
+                                       job_status = 'FAILED',
+                                       job_log = 'MD5 CHECKSUM failed; check file transfer.'))
                 print(f'Check job_id {self.job_id}')
-
-        self.original_paths = [p for p in 
-        self.apply_rule()
-
+                return # exit.
         
+        self.apply_rule() # can use the src_paths
+        # compare the hashes after
+        self._upload()
+        
+    def _upload(self):
+        # this reads the attributes and uploads
+        # It also puts the files in the Tables
+        
+        # destination in the bucket is actually the path
+        dst = [k for k in self.src_paths.src_path.values]
+        # source is the place where data are
+        src = [Path(self.local_path) / p for p in self.src_paths.src_path.values] # same as md5
+        # s3 copy in parallel hashes were compared before so no need to do it now.
+        copy_to_s3(src,dst,md5_checksum=None,storage_name=self.upload_storage)
+        from ..schema import UploadJob, File, dj, ProcessedFile, Dataset
+        with dj.conn().transaction:  # make it all update at the same time
+            # insert to Files so we know where to get the data
+            ins = []
+            for i,f in self.src_paths.iterrows():
+                ins.append(dict(file_path = f.src_path,
+                                storage = self.upload_storage,
+                                file_datetime = f.src_datetime,
+                                file_size = f.src_size,
+                                file_md5 = f.src_md5))
 
-            
+            File.insert(ins)
+            # Add to dataset?
+            job = self.jobquery.fetch(as_dict=True)[0]
+            # check if it has a dataset
+            if all([not job[a] is None for a in ['subject_name','session_name','dataset_name']]):
+                for i,p in enumerate(ins):
+                    ins[i] = dict(subject_name = job['subject_name'],
+                                  session_name = job['session_name'],
+                                  dataset_name = job['dataset_name'],
+                                  file_path = p['file_path'],
+                                  storage = self.upload_storage)
+                Dataset.DataFiles.insert(ins)
+            # Insert the processed files so the deletions are safe
+            if not self.processed_paths is None:
+                ins = []
+                for i,f in self.processed_paths.iterrows():
+                    ins.append(dict(file_path = f.src_path,
+                                    file_datetime = f.src_datetime,
+                                    file_size = f.src_size,
+                                    file_md5 = f.src_md5))
+                ProcessedFile.insert(ins)
+            (UploadJob & dict(job_id = self.job_id)).delete(safemode = False)
+            # completed
+        
+    def apply_rule(self):
+        # this rule does nothing, so the src_paths are going to be empty,
+        # and the "paths" are going to be the src_paths
+        self.processed_paths = None # processed paths are just the same, no file changed, so no need to do anything.
+        # needs to compute the checksum on all the new files
+        

@@ -2,6 +2,7 @@ import os
 import sys
 import numpy as np
 import pandas as pd
+from datetime import datetime
 
 import json
 import re  # can be removed?
@@ -19,6 +20,7 @@ from joblib import delayed, Parallel
 LABDATA_FILE = Path.home()/Path('labdata')/'user_preferences.json'
 DEFAULT_N_JOBS = 8
 
+# dataset_type part of Dataset()
 dataset_type_names = ['task-training',
                       'task-behavior',
                       'free-behavior',
@@ -29,6 +31,18 @@ dataset_type_names = ['task-training',
                       'opto-inactivation',
                       'opto-activation',
                       'analysis']
+# The following dictionary describes the equivalency between datatype_name and dataset_type (broadly)
+# todo: flip this the other way and split the types with slash or so.
+dataset_name_equivalence = dict(ephys ='ephys',
+                                task = 'task-training',
+                                two_photon = 'imaging-2p',
+                                one_photon = 'imaging-widefield',
+                                suite2p = 'analysis',
+                                kilosort = 'analysis',
+                                wfield = 'analysis',
+                                deeplabcut = 'analysis',
+                                analysis = 'analysis',
+                                caiman = 'analysis')
 
 default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],
                                    path_rules='{subject_name}/{session_name}/{dataset_name}', # to read the session/dataset from a path
@@ -95,7 +109,34 @@ prefs = get_labdata_preferences()
 
 
 ##########################################################
-        
+##########################################################
+
+def parse_filepath_parts(path,
+                         local_path = None,
+                         path_rules=None,
+                         session_date_rules = ['%Y%m%d_%H%M%S']):
+    
+    if path_rules is None:
+        path_rules = prefs['path_rules']
+    if local_path is None:
+        local_path = prefs['local_paths'][0]
+    parts = str(path).replace(local_path,'').split(pathlib.os.sep)
+    names = [f.strip('}').strip('{') for f in  path_rules.split('/')]
+    t = dict()
+    for i,n in enumerate(names):
+        t[n] = parts[i]
+    if 'session_name' in t.keys():
+        t['session_datetime'] = datetime.strptime(t['session_name'],session_date_rules[0])
+    if 'dataset_name' in t.keys():
+        for k in dataset_name_equivalence.keys():
+            if k in t['dataset_name'].lower():
+                t['dataset_type'] = dataset_name_equivalence[k]
+                break # found it..
+    return t
+
+##########################################################
+##########################################################
+
 def compute_md5_hash(fname):
     '''
     Computes the md5 hash that can be used to check file integrity
@@ -122,5 +163,5 @@ def compare_md5s(paths,checksums, n_jobs = DEFAULT_N_JOBS):
     res = [False]*len(paths)
     assert len(paths) == len(checksums), ValueError('Checksums not the same size as paths.')
     for ipath,(local,check) in enumerate(zip(localchecksums,checksums)):
-        res[ipath] = locall == check
+        res[ipath] = local == check
     return all(res)

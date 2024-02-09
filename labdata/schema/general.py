@@ -155,72 +155,6 @@ class Dataset(dj.Manual):
         -> File
         '''        
 
-@dataschema 
-class Upload(dj.Manual):  # add stuff to the upload table that the computer should upload. 
-    definition = '''
-    src_path               : varchar(300)      # local file path 
-    ---
-    src_datetime           : datetime          # date created
-    src_size               : double            # using double because int64 does not exist
-    src_md5 = NULL         : varchar(32)       # md5 checksum
-    upload_storage = NULL  : varchar(12)       # storage name, where to upload
-    -> [nullable] Dataset                      # optionally insert to dataset
-    '''
-
-    def put(self, key=None, local_path = None, storage_name = None):  # this actually does the upload and checks
-        '''
-        Upload data to S3.
-        '''
-        if key is None:
-            keys = pd.DataFrame(self.fetch())
-        else:
-            keys = pd.DataFrame((self & key).fetch())
-        # using only one local path; to do: iterate
-        if local_path is None:
-            assert 'local_paths' in prefs.keys(), ValueError('Preferences need to have "local_paths"')
-            assert type(prefs['local_paths']) is list, ValueError('"local_paths" has to be a list; check preference examples.')
-            local_path = prefs['local_paths'][0]
-
-        # get the storage to upload
-        if storage_name is None:         
-            if 'upload_storage' in prefs.keys():
-                storage_name = prefs['upload_storage']
-
-        # split the files by folder;
-        paths = [Path(local_path) / p for p in keys.src_path.values]
-        # get only the paths that exist
-        idx = np.where([p.exists() for p in paths])[0]
-        keys = keys.iloc[idx]
-        paths = [paths[i] for i in idx]
-        # get the folder names
-        keys['foldername'] = [p.parent for p in paths]
-        # do one folder at a time
-        for folder in np.unique(keys['foldername']):
-            nk = keys[keys.foldername == folder]
-            # need to check if there are any rules to apply to the dataset.
-            
-            # if so, then one needs to work at the folder level.
-            # 1) do the checksum, if any is wrong, don't do it.
-            # 2) process the folder
-            # 3) get the new filenames and upload
-            
-            # destination in the bucket is actually the path
-            dest = [k for k in nk.src_path.values]
-            # source is the place where data are
-            src = [Path(local_path) / p for p in nk.src_path.values]
-            # hashes are computed
-            hashes = [p for p in nk.src_md5.values]
-            # s3 copy in parallel
-            copy_to_s3(src,dest,md5_checksum=hashes,storage_name=storage_name)
-            # remove from the Upload table
-            with dj.conn().transaction:
-                # insert to File
-                # insert to Dataset.DataFiles
-
-                # delete from Upload
-                [(Upload() & 'src_path = "{0}"'.format(d.src_path)).delete(safemode = False) for i,d in nk.iterrows()]
-        return 
-
 @dataschema
 class UploadJob(dj.Manual):
     definition = '''
@@ -229,12 +163,77 @@ class UploadJob(dj.Manual):
     job_waiting = 1         : tinyint             # 1 if the job is up for grabs
     job_status = NULL       : varchar(52)         # status of the job (did it fail?)
     job_host = NULL         : varchar(52)         # where the job is running
+    job_rule = NULL         : varchar(52)         # what rule is it following
     job_log = NULL          : varchar(500)        # LOG
+    -> [nullable] Dataset                         # optionally insert to dataset
+    upload_storage = NULL  : varchar(12)          # storage name, where to upload
+
     '''
+    
     class AssignedFiles(dj.Part):
         definition = '''
         -> master
-        -> Upload
+        src_path               : varchar(300)      # local file path 
+        ---
+        src_datetime           : datetime          # date created
+        src_size               : double            # using double because int64 does not exist
+        src_md5 = NULL         : varchar(32)       # md5 checksum
         '''
 
+
+
+
+ #   def put(self, key=None, local_path = None, storage_name = None):  # this actually does the upload and checks
+ #       '''
+ #       Upload data to S3.
+ #       '''
+ #       if key is None:
+ #           keys = pd.DataFrame(self.fetch())
+ #       else:
+ #           keys = pd.DataFrame((self & key).fetch())
+        # using only one local path; to do: iterate
+ #       if local_path is None:
+ #           assert 'local_paths' in prefs.keys(), ValueError('Preferences need to have "local_paths"')
+ #           assert type(prefs['local_paths']) is list, ValueError('"local_paths" has to be a list; check preference examples.')
+ #           local_path = prefs['local_paths'][0]
+
+        # get the storage to upload
+#        if storage_name is None:         
+#            if 'upload_storage' in prefs.keys():
+#                storage_name = prefs['upload_storage']
+
+        # split the files by folder;
+#        paths = [Path(local_path) / p for p in keys.src_path.values]
+        # get only the paths that exist
+#        idx = np.where([p.exists() for p in paths])[0]
+#        keys = keys.iloc[idx]
+#        paths = [paths[i] for i in idx]
+        # get the folder names
+#        keys['foldername'] = [p.parent for p in paths]
+        # do one folder at a time
+#        for folder in np.unique(keys['foldername']):
+#            nk = keys[keys.foldername == folder]
+            # need to check if there are any rules to apply to the dataset.
+            
+            # if so, then one needs to work at the folder level.
+            # 1) do the checksum, if any is wrong, don't do it.
+            # 2) process the folder
+            # 3) get the new filenames and upload
+            
+            # destination in the bucket is actually the path
+#            dest = [k for k in nk.src_path.values]
+            # source is the place where data are
+#            src = [Path(local_path) / p for p in nk.src_path.values]
+            # hashes are computed
+#            hashes = [p for p in nk.src_md5.values]
+            # s3 copy in parallel
+#            copy_to_s3(src,dest,md5_checksum=hashes,storage_name=storage_name)
+            # remove from the Upload table
+#            with dj.conn().transaction:
+                # insert to File
+                # insert to Dataset.DataFiles
+
+                # delete from Upload
+#                [(Upload() & 'src_path = "{0}"'.format(d.src_path)).delete(safemode = False) for i,d in nk.iterrows()]
+#        return 
 

@@ -38,14 +38,17 @@ Server commands (don't run on experimental computers):
         parser = self._add_default_arguments(parser)
         parser.add_argument('-t','--datatype-name',
                             action='store',
-                            default=dataset_type_names, type=str,nargs='+')
+                            default=dataset_type_names, type=str,nargs=1)
 
             
         args = parser.parse_args(sys.argv[2:])
 
         if not len(args.subject[0]) or not len(args.session[0]):
-            print('start the gui')
-
+            from .widgets import QApplication, LABDATA_PUT
+            app = QApplication(sys.argv)
+            w = LABDATA_PUT()
+            sys.exit(app.exec_())
+ 
             
     def _add_default_arguments(self, parser):
         parser.add_argument('-a','--subject',
