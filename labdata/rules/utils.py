@@ -80,17 +80,19 @@ Can submit job on slurm, some of these can be long or take resources.
                     print("Job is already taken.")
                     print(job_status, flush = True)
                     return # exit.
-        self.upload_storage = self.jobquery.fetch('upload_storage')[0]
+            else:
+                raise ValueError(f'job_id {self.job_id} does not exist.')
         # get the paths
         self.src_paths = pd.DataFrame((UploadJob.AssignedFiles() & dict(job_id = self.job_id)).fetch())
-
         if not len(self.src_paths):
             UploadJob.update1(dict(job_id = self.job_id,
-                                       job_waiting = 0,
-                                       job_status = "FAILED",
-                                       job_log = f'Could not find files for {self.job_id} in Upload.AssignedFiles.',
-                                       job_host = None)) # add error msg
+                                   job_waiting = 0,
+                                   job_status = "FAILED",
+                                   job_log = f'Could not find files for {self.job_id} in Upload.AssignedFiles.',
+                                   job_host = None)) # add error msg
             raise ValueError(f'Could not find files for {self.job_id} in Upload.AssignedFiles.')
+        self.upload_storage = self.jobquery.fetch('upload_storage')[0]
+
         
         # this should not fail because we have to keep track of errors, should update the table
         src = [Path(self.local_path) / p for p in self.src_paths.src_path.values] 
