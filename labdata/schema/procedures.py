@@ -5,8 +5,11 @@ class ProcedureType(dj.Lookup):
     definition = """
     procedure_type : varchar(52)       #  Defines procedures that are not an experimental session
     """
-    contents = zip(['implant',
+    contents = zip(['surgery',
+                    'chronic implant',
+                    'chronic explant', 
                     'injection',
+                    'window implant',
                     'window replacement',
                     'handling',
                     'training',

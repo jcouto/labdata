@@ -22,11 +22,11 @@ def _copyfile_to_upload_server(filepath, local_path=None, server_path = None,ove
     file_size = srcstat.st_size
     from shutil import copy2
     dst.parent.mkdir(parents=True, exist_ok = True)
-    try:
-        copy2(src, dst)
-    except:
-        raise OSError(f'Could not copy {src} to {dst}.')
-    
+    if not src == dst: # if the source and destination are the same, don't copy - just return cause its nonesense..
+        try:
+            copy2(src, dst)
+        except:
+            raise OSError(f'Could not copy {src} to {dst}.')
     return dict(src_path = filepath,
                 src_md5 = hash,
                 src_size = file_size,
@@ -82,11 +82,7 @@ def copy_to_upload_server(filepaths, local_path = None, server_path = None,
                                                                         overwrite = overwrite) for path in filepaths)
     # Add it to the upload table
     # check the job id
-    jobid = UploadJob().fetch('job_id')
-    if len(jobid):
-        jobid = np.max(jobid)
-    else:
-        jobid = 1
+
     with dj.conn().transaction:
         print(kwargs)
         if "setup_name" in kwargs.keys():
@@ -102,7 +98,11 @@ def copy_to_upload_server(filepaths, local_path = None, server_path = None,
                                         session_name = 'session_name',
                                         dataset_name = 'dataset_name')):
                 Dataset.insert1(kwargs, skip_duplicates = True,ignore_extra_fields = True) # try to insert dataset
-            
+        jobid = UploadJob().fetch('job_id')
+        if len(jobid):
+            jobid = np.max(jobid) + 1 
+        else:
+            jobid = 1
         UploadJob.insert1(dict(job_id = jobid, 
                                job_status = "ON SERVER",
                                upload_storage = upload_storage,

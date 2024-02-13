@@ -1,4 +1,5 @@
 from .general import *
+from .procedures import *
 
 @dataschema
 class Probe(dj.Manual):
@@ -8,6 +9,29 @@ class Probe(dj.Manual):
     probe_type                : varchar(12)    # probe type
     probe_n_shanks            : tinyint        # number of shanks
     probe_recording_channels  : int            # number of recording channels
+    '''
+
+@dataschema
+class ProbeInsertion(dj.Manual):
+    definition = '''
+    -> Procedure
+    -> Probe
+    ---
+    insertion_ap         : float   # anterior posterior distance from bregma
+    insertion_ml         : float   # median lateral distance from bregma
+    insertion_depth      : float   # insertion depth (how much shank is inserted from dura)
+    insertion_el         : float   # elevation of the probe (angle)
+    insertion_az         : float   # azimuth of the probe  (angle)
+    insertion_spin = 0   : float   # spin on the probe shanks
+    '''
+
+@dataschema
+class ProbeExtraction(dj.Manual):
+    definition = '''
+    -> Procedure
+    -> Probe
+    ---
+    extraction_successful  : tinyint   # boolean for successfull or not
     '''
     
 @dataschema
@@ -27,11 +51,10 @@ class ProbeConfiguration(dj.Manual):
         Metadata can be a dictionary (with the metadata) or the path to an ap.meta file.
         '''
         from ..rules.ephys import get_probe_configuration
-        if 'probe_id' in metadata: # lets you not be constantly opening the file.
-            conf = metadata
-        else:
+        if not hasattr(metadata,'keys'):
             conf = get_probe_configuration(metadata)
-        
+        else:
+            conf = metadata
         
         probeid = conf['probe_id']
         if not len(Probe() & f'probe_id = "{probeid}"'):
@@ -64,6 +87,7 @@ class ProbeConfiguration(dj.Manual):
                     sampling_rate = conf['sampling_rate'],
                     recording_software = conf['recording_software'],
                     recording_duration = conf['recording_duration'])
+
 @dataschema
 class EphysRecording(dj.Imported):
     definition = '''
@@ -87,3 +111,20 @@ class EphysRecording(dj.Imported):
         '''
         Adds a recording from Dataset ap.meta files.
         '''
+        from ..schema import EphysRecording
+        paths = natsorted(list(filter( lambda x: x.endswith('.ap.meta'),
+                              pd.DataFrame((Dataset.DataFiles() & key).fetch()).file_path.values)))
+        local_path = Path(prefs['local_paths'][0])
+        for iprobe, p in enumerate(paths):
+            # add each configuration
+            tmp = ProbeConfiguration().add_from_spikeglx_metadata(local_path/p)
+            tt = dict(key,n_probes = len(paths),probe_num = iprobe,**tmp)
+            EphysRecording.insert1(tt,
+                                   ignore_extra_fields = True,
+                                   skip_duplicates = True,
+                                   allow_direct_insert=True)
+            EphysRecording.ProbeSetting.insert1(tt,
+                                                ignore_extra_fields = True,
+                                                skip_duplicates = True,
+                                                allow_direct_insert=True)
+        

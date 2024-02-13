@@ -40,6 +40,20 @@ def check_if_rules_apply(paths,rules = None):
             return rule, match
     return None, [False for f in paths]
 
+def _checksum_files(filepath, local_path):
+    '''
+    Checksum files that don't need to be copied
+    '''
+    # construct the path:
+    src = Path(local_path)/filepath
+    hash = compute_md5_hash(src)  # computes the hash
+    srcstat = src.stat()
+    file_size = srcstat.st_size
+    return dict(src_path = filepath,
+                src_md5 = hash,
+                src_size = file_size,
+                src_datetime = datetime.fromtimestamp(srcstat.st_ctime))
+
 class UploadRule():
     def __init__(self,job_id):
         '''
@@ -62,7 +76,8 @@ Can submit job on slurm, some of these can be long or take resources.
         self.processed_paths = None
         self.dst_paths = None
         self.local_path = prefs['local_paths'][0]
-
+        self.dataset_key = None # will get written on upload, use in _post_upload
+    def apply(self):
         # parse inputs
         from ..schema import UploadJob, File, dj
 
@@ -71,11 +86,7 @@ Can submit job on slurm, some of these can be long or take resources.
             job_status = self.jobquery.fetch(as_dict = True)
             if len(job_status):
                 if job_status[0]['job_waiting']:
-                    UploadJob.update1(dict(job_id = self.job_id,
-                                           job_waiting = 0,
-                                           job_status = "WORKING",
-                                           job_host = prefs['hostname'])) # take the job
-                    #print("Reserved job!")
+                    self.set_job_status(job_status = 'WORKING', job_waiting = 0) # take the job
                 else:
                     print("Job is already taken.")
                     print(job_status, flush = True)
@@ -85,11 +96,8 @@ Can submit job on slurm, some of these can be long or take resources.
         # get the paths
         self.src_paths = pd.DataFrame((UploadJob.AssignedFiles() & dict(job_id = self.job_id)).fetch())
         if not len(self.src_paths):
-            UploadJob.update1(dict(job_id = self.job_id,
-                                   job_waiting = 0,
-                                   job_status = "FAILED",
-                                   job_log = f'Could not find files for {self.job_id} in Upload.AssignedFiles.',
-                                   job_host = None)) # add error msg
+            self.set_job_status(job_status = 'FAILED',
+                                job_log = f'Could not find files for {self.job_id} in Upload.AssignedFiles.')
             raise ValueError(f'Could not find files for {self.job_id} in Upload.AssignedFiles.')
         self.upload_storage = self.jobquery.fetch('upload_storage')[0]
 
@@ -98,19 +106,55 @@ Can submit job on slurm, some of these can be long or take resources.
         src = [Path(self.local_path) / p for p in self.src_paths.src_path.values] 
         if not compare_md5s(src,self.src_paths.src_md5.values):
             print('CHECKSUM FAILED for {0}'.format(Path(self.src_paths.src_path.iloc[0]).parent))
-            if not self.job_id is None:
-                # recomputing md5s
-                UploadJob.update1(dict(job_id = self.job_id,
-                                       job_host = prefs['hostname'], # write the hostname so we know where it failed.
-                                       job_status = 'FAILED',
-                                       job_log = 'MD5 CHECKSUM failed; check file transfer.'))
-                print(f'Check job_id {self.job_id}')
-                return # exit.
-        
-        self.apply_rule() # can use the src_paths
+            self.set_job_status(job_status = 'FAILED',job_log = 'MD5 CHECKSUM failed; check file transfer.')
+            return # exit.
+        try:
+            self._apply_rule() # can use the src_paths
+        except Exception as err:
+            # log the error
+            print('There was an error processing this dataset.')
+            print(err)
+            self.set_job_status(job_status = 'FAILED',job_log = f'{err}')
+            return
         # compare the hashes after
         self._upload()
+        self._post_upload() # so the rules can insert tables and all.
         
+    def set_job_status(self, job_status = 'FAILED',job_log = '',job_waiting = 0):
+        from ..schema import UploadJob
+        if not self.job_id is None:
+            # recomputing md5s
+            UploadJob.update1(dict(job_id = self.job_id,
+                                   job_waiting = job_waiting,
+                                   job_host = prefs['hostname'], # write the hostname so we know where it failed.
+                                   job_status = job_status,
+                                   job_log = job_log))
+            print(f'Check job_id {self.job_id} : {job_status}')
+
+    def _handle_processed_and_src_paths(self, processed_files,new_files):
+        '''
+        Put the files in the proper place and compute checksums for new files.
+        Call this from the apply method.
+        '''
+        n_jobs = DEFAULT_N_JOBS
+        self.processed_paths = []
+        for f in processed_files:
+            i = np.where(self.src_paths.src_path == f)[0][0]
+            self.processed_paths.append(self.src_paths.iloc[i])
+            self.src_paths.drop(self.src_paths.iloc[i].name,axis = 0,inplace = True)
+            self.src_paths.reset_index(drop=True,inplace = True)
+        self.processed_paths = pd.DataFrame(self.processed_paths).reset_index(drop=True)        
+
+        res = Parallel(n_jobs = n_jobs)(delayed(_checksum_files)(
+            path,
+            local_path = self.local_path) for path in new_files)
+        for r in res:
+            r['job_id'] = self.job_id
+        self.src_paths = pd.concat([self.src_paths,pd.DataFrame(res)], ignore_index=True)
+
+    def _post_upload(self):
+        return
+    
     def _upload(self):
         # this reads the attributes and uploads
         # It also puts the files in the Tables
@@ -144,6 +188,9 @@ Can submit job on slurm, some of these can be long or take resources.
                                   file_path = p['file_path'],
                                   storage = self.upload_storage)
                 Dataset.DataFiles.insert(ins)
+                self.dataset_key = dict(subject_name = job['subject_name'],
+                                        session_name = job['session_name'],
+                                        dataset_name = job['dataset_name'])
             # Insert the processed files so the deletions are safe
             if not self.processed_paths is None:
                 ins = []
@@ -156,7 +203,7 @@ Can submit job on slurm, some of these can be long or take resources.
             (UploadJob & dict(job_id = self.job_id)).delete(safemode = False)
             # completed
         
-    def apply_rule(self):
+    def _apply_rule(self):
         # this rule does nothing, so the src_paths are going to be empty,
         # and the "paths" are going to be the src_paths
         self.processed_paths = None # processed paths are just the same, no file changed, so no need to do anything.
