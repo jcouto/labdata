@@ -17,6 +17,8 @@ classifiers = [
 dependencies = [
 	     "minio",
 	     "datajoint",
+	     "boto3",
+	     "spython"
 ]
 dynamic = ["version"]
 

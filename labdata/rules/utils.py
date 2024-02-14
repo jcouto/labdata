@@ -77,6 +77,7 @@ Can submit job on slurm, some of these can be long or take resources.
         self.dst_paths = None
         self.local_path = prefs['local_paths'][0]
         self.dataset_key = None # will get written on upload, use in _post_upload
+        
     def apply(self):
         # parse inputs
         from ..schema import UploadJob, File, dj
@@ -89,8 +90,8 @@ Can submit job on slurm, some of these can be long or take resources.
                     if job_status[0]['job_waiting']:
                         self.set_job_status(job_status = 'WORKING', job_waiting = 0) # take the job
                     else:
-                        print("Job is already taken.")
-                        print(job_status, flush = True)
+                        print(f"Job {self.job_id} is already taken.")
+                        #print(job_status, flush = True)
                         return # exit.
                 else:
                     raise ValueError(f'job_id {self.job_id} does not exist.')

@@ -47,6 +47,11 @@ dataset_name_equivalence = dict(ephys ='ephys',
 default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],
                                    path_rules='{subject_name}/{session_name}/{dataset_name}', # to read the session/dataset from a path
                                    queues= None,
+                                   compute = dict(aws=dict(access_key = None,
+                                                           secret_key = None,
+                                                           region = 'us-west-2')),
+                                   compute_containers = dict(local_path = str(Path.home()/
+                                                                              Path('labdata')/'containers')),
                                    storage = dict(ucla_data = dict(protocol = 's3',
                                                                    endpoint = 's3.amazonaws.com:9000',
                                                                    bucket = 'churchland-ucla-data',
@@ -165,3 +170,17 @@ def compare_md5s(paths,checksums, n_jobs = DEFAULT_N_JOBS):
     for ipath,(local,check) in enumerate(zip(localchecksums,checksums)):
         res[ipath] = local == check
     return all(res)
+
+
+def get_filepaths(keys,local_paths = None, download = False):
+    '''
+    Returns the local path to files and downloads the files if needed. 
+    '''
+    if local_paths is None:
+        local_paths = prefs['local_paths']
+
+    for path in local_paths:
+        # try to find the files
+        
+        pass
+    

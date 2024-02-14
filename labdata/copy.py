@@ -82,9 +82,8 @@ def copy_to_upload_server(filepaths, local_path = None, server_path = None,
                                                                         overwrite = overwrite) for path in filepaths)
     # Add it to the upload table
     # check the job id
-
     with dj.conn().transaction:
-        print(kwargs)
+        #print(kwargs)
         if "setup_name" in kwargs.keys():
             Setup.insert1(kwargs, skip_duplicates = True,ignore_extra_fields = True) # try to insert setup
         if "dataset_name" in kwargs.keys() and "session_name" in kwargs.keys() and "subject_name" in kwargs.keys():
@@ -110,7 +109,8 @@ def copy_to_upload_server(filepaths, local_path = None, server_path = None,
                           ignore_extra_fields = True) # Need to insert the dataset first if not there
         
         res = [dict(r, job_id = jobid) for r in res] # add dataset through kwargs
-        UploadJob.AssignedFiles.insert(res, ignore_extra_fields=True) # the upload server will run the checksum and upload the files.
+        UploadJob.AssignedFiles.insert(res, ignore_extra_fields=True)
+        # the upload server will run the checksum and upload the files.
     return res
 
 def any_path_uploaded(filepaths):
