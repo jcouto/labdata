@@ -82,17 +82,18 @@ Can submit job on slurm, some of these can be long or take resources.
         from ..schema import UploadJob, File, dj
 
         if not self.job_id is None:
-            self.jobquery = (UploadJob() & dict(job_id = self.job_id))
-            job_status = self.jobquery.fetch(as_dict = True)
-            if len(job_status):
-                if job_status[0]['job_waiting']:
-                    self.set_job_status(job_status = 'WORKING', job_waiting = 0) # take the job
+            with dj.conn().transaction:
+                self.jobquery = (UploadJob() & dict(job_id = self.job_id))
+                job_status = self.jobquery.fetch(as_dict = True)
+                if len(job_status):
+                    if job_status[0]['job_waiting']:
+                        self.set_job_status(job_status = 'WORKING', job_waiting = 0) # take the job
+                    else:
+                        print("Job is already taken.")
+                        print(job_status, flush = True)
+                        return # exit.
                 else:
-                    print("Job is already taken.")
-                    print(job_status, flush = True)
-                    return # exit.
-            else:
-                raise ValueError(f'job_id {self.job_id} does not exist.')
+                    raise ValueError(f'job_id {self.job_id} does not exist.')
         # get the paths
         self.src_paths = pd.DataFrame((UploadJob.AssignedFiles() & dict(job_id = self.job_id)).fetch())
         if not len(self.src_paths):
