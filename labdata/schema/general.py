@@ -156,7 +156,32 @@ class Dataset(dj.Manual):
         definition = '''
         -> master
         -> File
-        '''        
+        '''
+
+# Synchronization variables for the dataset live here; these can come from different streams
+@dataschema
+class DatasetEvents(dj.Imported):
+    definition = '''
+    -> Dataset
+    stream_name                       : varchar(54)   # which clock is used e.g. btss, nidq, bpod
+    ---
+    analog_times = NULL               : longblob      # for e.g. the analog events
+    '''
+    class DigitalEvent(dj.Part):
+        definition = '''
+        -> master
+        event_name                    : varchar(54)
+        ---
+        event_onsets = NULL           : longblob  # timestamps of the events
+        event_values = NULL           : longblob  # event value or count
+        '''
+    class AnalogChannel(dj.Part):
+        definition = '''
+        -> master
+        channel_name                 : varchar(54)
+        ---
+        channel_values = NULL        : longblob  # analog values for channel
+        '''
 
 # Upload queue, so that experimental computers are not transfering data 
 @dataschema

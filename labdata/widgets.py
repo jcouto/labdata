@@ -59,6 +59,22 @@ def make_tree(item, tree):
         make_tree(
             tail,
             tree[head])
+
+class TableView(QTableWidget):
+    def __init__(self, *args):
+        QTableWidget.__init__(self, *args)
+        header = ['folder','n_files','subject_name','session_name','dataset_name']
+        self.setHorizontalHeaderLabels(header)
+
+    def setData(self,data):
+        self.data = data
+        for i,item in enumerate(self.data):
+            for j,k in enumerate(header):
+                newitem = QTableWidgetItem(item[k])
+                self.setItem(i, j, newitem)
+        self.resizeColumnsToContents()
+        self.resizeRowsToContents()
+
 def get_tree_path(items,root = ''):
     ''' Get the paths from a QTreeView item'''
     paths = []
@@ -105,11 +121,17 @@ class FileView(QTreeView):
             for f in allfolders:
                 f = str(f)
                 files = list(filter(lambda x: str(f) in str(x),list(allfiles)))
-                to_upload.append(dict(foldername = pathnofolder(f),
+                header = ['folder','n_files','subject_name','session_name','dataset_name']
+                ff = pathnofolder(f)
+                from parse import parse
+                
+                to_upload.append(dict(folder = ff,
                                       files = [pathnofolder(p) for p in files],
-                                      nfiles = len(files)))
+                                      n_files = len(files)),
+                                 )
             # put this in the other side.
         self.clicked.connect(handle_click)
+        
 class LABDATA_PUT(QMainWindow):
     def __init__(self, preferences = None):
         super(LABDATA_PUT,self).__init__()

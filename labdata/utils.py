@@ -184,3 +184,18 @@ def get_filepaths(keys,local_paths = None, download = False):
         
         pass
     
+
+def plugin_lazy_import(name):
+    '''
+    Lazy import function to load the plugins.
+    '''
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, str(Path(prefs['plugins'][name])/"__init__.py"))
+    loader = importlib.util.LazyLoader(spec.loader)
+    spec.loader = loader
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    loader.exec_module(module)
+    return module
+
+
