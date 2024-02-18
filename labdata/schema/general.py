@@ -165,14 +165,14 @@ class DatasetEvents(dj.Imported):
     -> Dataset
     stream_name                       : varchar(54)   # which clock is used e.g. btss, nidq, bpod
     ---
-    analog_times = NULL               : longblob      # for e.g. the analog events
+    stream_time = NULL                 : longblob      # for e.g. the analog channels
     '''
-    class DigitalEvent(dj.Part):
+    class DigitalEvents(dj.Part):
         definition = '''
         -> master
         event_name                    : varchar(54)
         ---
-        event_onsets = NULL           : longblob  # timestamps of the events
+        event_timestamps = NULL       : longblob  # timestamps of the events
         event_values = NULL           : longblob  # event value or count
         '''
     class AnalogChannel(dj.Part):
@@ -215,15 +215,14 @@ class ComputeTask(dj.Manual):
     definition = '''
     job_id                  : int auto_increment
     ---
-    job_waiting = 1         : tinyint             # 1 if the job is up for grabs
-    job_status = NULL       : varchar(52)         # status of the job (did it fail?)
-    job_target = NULL       : varchar(52)         # where to run the job, so it only runs where selected
-    job_host = NULL         : varchar(52)         # where the job is running
-    job_cmd = NULL          : varchar(500)        # command to run
-    job_log = NULL          : varchar(500)        # LOG
+    task_waiting = 1         : tinyint             # 1 if the job is up for grabs
+    task_status = NULL       : varchar(52)         # status of the job (did it fail?)
+    task_target = NULL       : varchar(52)         # where to run the job, so it only runs where selected
+    task_host = NULL         : varchar(52)         # where the job is running
+    task_cmd = NULL          : varchar(500)        # command to run
+    task_post_cmd = NULL     : varchar(500)        # command to run after the job finishes
+    task_log = NULL          : varchar(500)        # LOG
     -> [nullable] Dataset                         # dataset
-    job_post_cmd = NULL     : varchar(500)        # command to run after the job finishes
-
     '''
     
     class AssignedFiles(dj.Part):

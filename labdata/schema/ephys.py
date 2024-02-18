@@ -93,20 +93,26 @@ class EphysRecording(dj.Imported):
     definition = '''
     -> Dataset
     ---
-    n_probes               : smallint        # number of probes
-    recording_duration     : float           # duration of the recording
-    recording_software     : varchar(56)     # software_version
+    n_probes               : smallint            # number of probes
+    recording_duration     : float               # duration of the recording
+    recording_software     : varchar(56)         # software_version 
     '''
     
     class ProbeSetting(dj.Part):
         definition = '''
-        -> Dataset
+        -> master
         probe_num               : smallint       # probe number
         ---
         -> ProbeConfiguration
         sampling_rate           : float          # sampling rate 
-
-        '''     
+        '''
+    class ProbeFile(dj.Part):
+        definition = '''
+        -> EphysRecording.ProbeSetting
+        probe_num               : smallint       # probe number
+        -> File
+        '''
+        
     def add_spikeglx_recording(self,key):
         '''
         Adds a recording from Dataset ap.meta files.
@@ -122,9 +128,93 @@ class EphysRecording(dj.Imported):
             EphysRecording.insert1(tt,
                                    ignore_extra_fields = True,
                                    skip_duplicates = True,
-                                   allow_direct_insert=True)
+                                   allow_direct_insert = True)
             EphysRecording.ProbeSetting.insert1(tt,
                                                 ignore_extra_fields = True,
                                                 skip_duplicates = True,
-                                                allow_direct_insert=True)
+                                                allow_direct_insert = True)
+            pfiles = list(filter(lambda x: f'imec{iprobe}.ap.' in x,paths))
+            EphysRecording.ProbeFile().insert([
+                dict(tt,
+                     **(File() & f'file_path = "{fi}"').proj().fetch(as_dict = True)[0])
+                for fi in pfiles],
+                                              skip_duplicates = True)
+
+@dataschema
+class EphysAnalysisParams(dj.Manual):
+    definition = '''
+    algorithm_name         : varchar(52)   # Preprocessing Spike sorting algorithm 
+    parameter_set_num      : int           # Parameters
+    ---
+    code_link = NULL        : varchar(300)   #  the software that preprocesses and sorts
+    '''
+    class Parameters(dj.Part):
+        definition = '''
+        -> master
+        param_name          : varchar(52)  # name of the parameter
+        ---
+        param_value         : varchar(52)  # value of the parameter
+        param_cast = NULL   : varchar(52)  # datatype name to cast the parameter
+        '''
+
+@dataschema
+class SpikeSorting(dj.Manual):
+    definition = '''
+    -> EphysRecording.ProbeSetting
+    -> EphysAnalysisParams
+    ---
+    n_pre_samples                     : smallint   # to compute the waveform time 
+    n_sorted_units    = NULL          : int        # number of sorted units
+    n_detected_spikes = NULL          : int        # number of detected spikes
+    sorting_datetime = NULL           : datetime   # date of the spike sorting analysis
+    channel_indices = NULL            : longblob   # channel_map
+    channel_coords = NULL             : longblob   # channel_positions
+   '''
+    
+    class Unit(dj.Part):
+        definition = '''
+        -> master
+        unit_id                  : int       # cluster id
+        ---
+        spike_times              : longblob  # in samples (uint64)
+        spike_positions = NULL   : longblob  # spike position in the electrode
+        '''
         
+    class Features(dj.Part):
+        definition = '''
+        -> SpikeSorting.Unit
+        ---
+        amplitudes = NULL  : longblob        # template amplitudes for each unit
+        pc_features = NULL : longblob        # Principal Component features
+        '''
+
+    class Templates(dj.Part):
+       definition = '''
+       -> SpikeSorting
+       ---
+       pc_features_idx = NULL   : longblob    # template index for each pc feature
+       template = NULL          : longblob    # templates
+       whitening_matrix = NULL  : longblob    # whitening_matrix_inv.npy
+       '''
+       
+    class Waveforms(dj.Part):
+        definition = '''
+        -> SpikeSorting.Unit
+        ---
+        waveform_mean    :  longblob         # average waveform
+        waveforms        :  longblob         # waveform examples
+        waveform_indice  :  longblob         # indice of the spikes for the waveform
+        '''
+
+@dataschema
+class UnitMetrics(dj.Computed):
+   # Compute the metrics from the each unit,
+   # so we can recompute and add new ones if needed and not depend on the clustering
+   definition = '''
+   -> SpikeSorting.Unit
+   ---
+   n_spikes                 : int
+   isi_violations = NULL    : float
+   amplitude_cutoff = NULL  : float
+   '''
+#   #
