@@ -14,7 +14,7 @@ def read_events_from_btss_riglog(logfile):
     '''
     from btss import parse_riglog   # github.com/jcouto/btss
     
-    log,comm = parse_riglog(logfile)
+    log,comm = parse_riglog(str(logfile))
     # insert btss log 
     datasetevents = []
 
@@ -23,11 +23,17 @@ def read_events_from_btss_riglog(logfile):
         if not ev is None:
             if not k in ['vstim']: # log the teensy/arduino
                 stream_name = 'duino'
-                idx = np.argsort(ev['duinotime']) # make sure these are sorted
+                t = np.array(ev['duinotime'].values,float)
+                v = ev['value'].values
+                try:
+                    v = np.array(v,dtype = float)
+                except: # let it be
+                    pass
+                idx = np.argsort(t) # make sure these are sorted
                 datasetevents.append(dict(stream_name = stream_name,
                                           event_name = k,
-                                          event_timestamps = ev['duinotime'].values[idx],  # in seconds
-                                          event_values = ev['value'].values[idx]))
+                                          event_timestamps = t[idx],  # in seconds
+                                          event_values = v[idx]))
             elif k == 'vstim': # log psychopy
                 stream_name = k
                 for d in ev.columns:
@@ -37,8 +43,11 @@ def read_events_from_btss_riglog(logfile):
                         idx = np.arange(len(v))
                         # if np.isreal(v[0]):
                         #     idx = np.isfinite(v)  # select only finite
-                        t = t[idx]
-                        v = v[idx]
+                        t = np.array(t[idx],dtype = float)
+                        try: # cast ints
+                            v = np.array(v[idx],dtype = float)
+                        except: # let it be
+                            v = v[idx]
                         idx = np.argsort(t)
                         datasetevents.append(dict(stream_name = stream_name,
                                               event_name = d,
@@ -52,10 +61,14 @@ def read_events_from_btss_riglog(logfile):
     for c in comm:
         for i,k in enumerate(to_parse.keys()):
             if k in c:
-                t,v = [float(f) for f in re.findall("\d+\.\d+",c)]
-                if i == 0:
-                    time.append(t)
-                to_parse[k].append(v)
+                tmp = [float(f) for f in re.findall("\d+\.\d+",c)]
+                if len(tmp) == 2:
+                    t,v = tmp
+                    if i == 0:
+                        time.append(t)
+                    to_parse[k].append(v)
+                else:
+                    print(f'Error in {c} for {logfile}')
     if len(time):
         for k in to_parse.keys():
             datasetevents.append(dict(stream_name = stream_name,

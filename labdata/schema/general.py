@@ -146,7 +146,7 @@ class Dataset(dj.Manual):
     definition = """
     -> Subject
     -> Session
-    dataset_name             : varchar(32)    
+    dataset_name             : varchar(128)    
     ---
     -> [nullable] DatasetType
     -> [nullable] Setup
@@ -167,7 +167,7 @@ class DatasetEvents(dj.Imported):
     ---
     stream_time = NULL                 : longblob      # for e.g. the analog channels
     '''
-    class DigitalEvents(dj.Part):
+    class Digital(dj.Part):
         definition = '''
         -> master
         event_name                    : varchar(54)

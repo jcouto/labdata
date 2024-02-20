@@ -92,3 +92,47 @@ def get_probe_configuration(meta):
                 channel_coords = meta['coords'],
                 channel_shank = meta['channel_shank'],
                 probe_recording_channels = int(meta['nSavedChans']-1))
+
+
+def ephys_noise_statistics_from_file(filepath,channel_indices, gain, sampling_rate = 30000, duration = 60):
+    '''
+    statistics = ephys_noise_statistics_from_file(filepath,channel_indices, gain, sampling_rate = 30000, duration = 60)
+
+    Gets the noise statistics from a raw data file. It won't parse the whole file, instead it will extract 2 chunks, one 
+    from t=duration to t=duration*2 and another from t=end of recording-duration*2 to t=end of recording-duration.
+    Then computes: the peak to peak, min, max, median and absolute median deviation of those chunks.
+
+    This is useful just to compare the start and end of the recording or to have ballpark estimations of these values. 
+    For more accurate measurements split the recording in chunks of e.g. 1 second, compute it for the entire file, then average and std.
+    This will max if there are artifacts in the chunks. 
+
+    Joao Couto - labdata 2024
+    '''
+    
+    filepath = Path(filepath)
+    if str(filepath).endswith('.cbin'):
+        from mtscomp import decompress
+        data = decompress(filepath) #,filepath.with_suffix('.ch'))
+    elif str(filepath).endswith('.bin'):
+        from spks.spikeglx_utils import load_spikeglx_binary
+        data,meta = load_spikeglx_binary(filepath)
+    else:
+        raise ValueError(f'Could not handle extension: {filepath}')
+    # read the head and tail data
+    head_data = np.array(data[int(sampling_rate*duration):int(sampling_rate*duration)*2],dtype=np.float32)*gain
+    tail_data = np.array(data[-int(sampling_rate*duration)*2:-int(sampling_rate*duration)],dtype = np.float32)*gain
+    dd = [head_data,tail_data]
+
+    res = dict(channel_peak_to_peak = np.zeros((len(channel_indices),len(dd))),
+                 channel_median = np.zeros((len(channel_indices),len(dd))),
+                 channel_mad = np.zeros((len(channel_indices),len(dd))),
+                 channel_max = np.zeros((len(channel_indices),len(dd))),
+                 channel_min = np.zeros((len(channel_indices),len(dd))))
+    from scipy.stats import median_abs_deviation
+    for i,d in enumerate(dd):
+        res['channel_mad'][:,i] = median_abs_deviation(d[:,channel_indices],axis = 0) 
+        res['channel_max'][:,i] = np.max(d[:,channel_indices],axis = 0) 
+        res['channel_min'][:,i] = np.min(d[:,channel_indices],axis = 0) 
+        res['channel_median'][:,i] = np.median(d[:,channel_indices],axis = 0) 
+        res['channel_peak_to_peak'][:,i] = res['channel_max'][:,i]-res['channel_min'][:,i]
+    return res

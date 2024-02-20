@@ -133,13 +133,52 @@ class EphysRecording(dj.Imported):
                                                 ignore_extra_fields = True,
                                                 skip_duplicates = True,
                                                 allow_direct_insert = True)
-            pfiles = list(filter(lambda x: f'imec{iprobe}.ap.' in x,paths))
+            # only working for spikeglx files for the moment.
+            pfiles = list(filter(lambda x: f'imec{iprobe}.ap.' in x,paths)) 
             EphysRecording.ProbeFile().insert([
                 dict(tt,
                      **(File() & f'file_path = "{fi}"').proj().fetch(as_dict = True)[0])
                 for fi in pfiles],
-                                              skip_duplicates = True)
+                                              skip_duplicates = True,
+                                              ignore_extra_fields = True,
+                                              allow_direct_insert = True)
+            EphysRecordingNoiseStats().populate(tt) # try to populate the NoiseStats table (this will take a couple of minutes)
 
+@dataschema
+class EphysRecordingNoiseStats(dj.Computed):
+    # Statistics to access recording noise on multisite 
+    definition = '''
+    -> EphysRecording.ProbeSetting
+    ---
+    channel_median = NULL             : longblob  # nchannels*2 array, the 1st column is the start, 2nd at the end of the file
+    channel_max = NULL                : longblob 
+    channel_min = NULL                : longblob
+    channel_peak_to_peak = NULL       : longblob
+    channel_mad = NULL                : longblob  # median absolute deviation
+    '''
+    duration = 30                     # duration of the stretch to sample (takes it from the start and the end of the file)
+
+    def make(self,key):
+        files = pd.DataFrame((EphysRecording.ProbeFile() & key).fetch())
+        assert len(files), ValueError(f'No files for dataset {key}')
+        # search for the recording files (this is set for compressed files now)
+        recording_file = list(filter(lambda x : 'ap.cbin' in x,files.file_path.values))
+        assert len(recording_file),ValueError(f'Could not find ap.cbin for {key}. Check Dataset.DataFiles?')
+        recording_file = recording_file[0]
+        filepath = find_local_filepath(recording_file, allowed_extensions = ['.ap.bin'])
+        assert not filepath is None, ValueError(f'File [{recording_file}] not found in local paths.')
+        # to get the gain, the channel_indices, and the sampling rate
+        config = pd.DataFrame((ProbeConfiguration()*EphysRecording.ProbeSetting() & key).fetch()).iloc[0]
+        # compute
+        from ..rules.ephys import ephys_noise_statistics_from_file
+        noisestats = ephys_noise_statistics_from_file(filepath,
+                                                      duration = self.duration,
+                                                      channel_indices = config.channel_idx,
+                                                      sampling_rate = config.sampling_rate,
+                                                      gain = config.probe_gain)        
+        self.insert1(dict(key,**noisestats),ignore_extra_fields = True)
+
+    
 @dataschema
 class EphysAnalysisParams(dj.Manual):
     definition = '''
@@ -201,9 +240,9 @@ class SpikeSorting(dj.Manual):
         definition = '''
         -> SpikeSorting.Unit
         ---
-        waveform_mean    :  longblob         # average waveform
-        waveforms        :  longblob         # waveform examples
-        waveform_indice  :  longblob         # indice of the spikes for the waveform
+        waveform_mean      :  longblob         # average waveform
+        waveforms          :  longblob         # 500 example waveforms from the start of the recording, 500 from the end
+        waveforms_indices  :  longblob         # indice of the spikes for the waveform
         '''
 
 @dataschema

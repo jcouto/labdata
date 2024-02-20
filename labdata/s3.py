@@ -101,3 +101,26 @@ def copy_to_s3(source_files, destination_files,
                                                             md5_checksum = md5)
                                     for src,dst,md5 in zip(source_files,destination_files,md5_checksum))
     return res
+
+
+def s3_delete_file(filepath,storage, remove_versions = False):
+    '''
+    Deletes files from s3.
+
+    !!Warning!! this does not wait for confirmation.
+    
+    Joao Couto - 2024
+    '''
+    
+    client = Minio(endpoint = storage['endpoint'],
+                   access_key = storage['access_key'],
+                   secret_key = storage['secret_key'])
+
+    if remove_versions:
+        objects = client.list_objects(storage['bucket'], prefix=filepath,include_version=True)
+        for obj in objects:
+            res = client.remove_object(storage['bucket'], obj.object_name,version_id=obj.version_id)
+        return 
+    else:
+        res = client.remove_object(storage['bucket'], filepath)
+    return res

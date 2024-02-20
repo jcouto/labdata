@@ -176,15 +176,39 @@ def get_filepaths(keys,local_paths = None, download = False):
     '''
     Returns the local path to files and downloads the files if needed. 
     '''
+
+    path = keys.file_path
+    pass
+    
+def find_local_filepath(path,allowed_extensions = [],local_paths = None):
+    '''
+    Search for a file in local paths and return the path.
+    This function exists so that files can be distributed in different file systems.
+    List the local paths (i.e. the different filesystems) in labdata/user_preferences.json
+
+    allowed_extensions can be used to find similar extensions 
+(e.g. when files are compressed and you want to find the original file)
+
+    localpath = find_local_filepath(path, allowed_extensions = ['.ap.bin'])
+
+    Joao Couto - labdata 2024
+    '''
     if local_paths is None:
         local_paths = prefs['local_paths']
-
-    for path in local_paths:
-        # try to find the files
         
-        pass
-    
+    for p in local_paths:
+        p = Path(p)/path
+        if p.exists():
+            return p # return when you find the file
+        for ex in allowed_extensions:
+            p = (p.parent/p.stem).with_suffix(ex)
+            if p.exists():
+                return p # found allowed extensions (use this to find ProcessedFiles)
+            
+    return None  # file not found
 
+
+    
 def plugin_lazy_import(name):
     '''
     Lazy import function to load the plugins.
@@ -199,3 +223,6 @@ def plugin_lazy_import(name):
     return module
 
 
+def extrapolate_time_from_clock(master_clock,master_events, slave_events):
+    from scipy.interpolate import interp1d
+    return interp1d(master_events,master_clock,fill_value='extrapolate')(slave_events)
