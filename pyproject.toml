@@ -18,7 +18,9 @@ dependencies = [
 	     "minio",
 	     "datajoint",
 	     "boto3",
-	     "spython"
+	     "spython",
+	     "natsort",
+	     "pandas"
 ]
 dynamic = ["version"]
 
