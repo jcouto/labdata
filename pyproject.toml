@@ -18,6 +18,7 @@ dependencies = [
 	     "minio",
 	     "datajoint",
 	     "boto3",
+	     "joblib",
 	     "spython",
 	     "natsort",
 	     "pandas"
