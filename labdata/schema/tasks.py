@@ -26,11 +26,13 @@ class DecisionTask(dj.Imported): # imported because if comes from data but there
         n_correct                : int         # number of correct trials
         performance_easy         : float       # performance on easy trials
         performance              : float       # performance on all trials
-        reaction_times = NULL    : longblob    # time between onset of the response period and reporting  
         trial_num                : longblob    # trial number because TrialSets can be intertwined
-        initiation_times = NULL  : longblob    # time between trial start and stim onset 
+        initiation_times = NULL  : longblob    # time between trial start and stim onset
+        assisted = NULL          : longblob    # wether the trial was assisted
         response_values = NULL   : longblob    # left=1;no response=0; right=-1        
+        correct_values = NULL    : longblob    # correct = 1; no_response  = NaN; wrong = 0        
         intensity_values = NULL  : longblob    # value of the stim (left-right)
+        reaction_times = NULL    : longblob    # between onset of the response period and reporting  
         block_values = NULL      : longblob    # block number for each trial
         '''
 
