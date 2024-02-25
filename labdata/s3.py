@@ -4,6 +4,13 @@ from minio import Minio
 # download files from S3
 # move objects to old tier.
 
+__all__ = ['validate_storage',
+           'copyfile_to_s3',
+           'copyfile_from_s3',
+           'copy_to_s3',
+           'copy_from_s3',
+           's3_delete_file']
+
 def validate_storage(storage):
     '''
     storage = validate_storage(storage)
@@ -102,13 +109,66 @@ def copy_to_s3(source_files, destination_files,
                                     for src,dst,md5 in zip(source_files,destination_files,md5_checksum))
     return res
 
+def copyfile_from_s3(source_file,
+                     destination_file,
+                     storage,
+                     md5_checksum = None):
+    '''
+    Copy a single file to S3 and do a checksum comparisson.
+
+    Joao Couto - 2024
+    '''
+    
+    client = Minio(endpoint = storage['endpoint'],
+                   access_key = storage['access_key'],
+                   secret_key = storage['secret_key'])
+
+    if 'folder' in storage.keys():
+        if len(storage['folder']):
+            destination_file = storage['folder'] + '/' + destination_file
+
+    res = client.fget_object(
+        storage['bucket'], source_file, destination_file)
+    return res
+
+def copy_from_s3(source_files, destination_files,
+                 storage = None,
+                 storage_name = None,
+                 n_jobs = DEFAULT_N_JOBS):
+    '''
+    Copy from S3.
+    Copy occurs in parallel for multiple files.
+
+    Joao Couto - 2024
+    '''
+    if storage is None:
+        if storage_name is None:
+            raise ValueError("Specify a storage to copy to - either pass the storage dictionary or specify a name from the prefs.")
+        storage = prefs['storage'][storage_name] # link to preferences storage from storage_name
+    storage = validate_storage(storage) # validate and update keys, this will store the credentials
+
+    if not type(source_files) is list: # check type of source
+        raise ValueError('source_files has to be a list of paths from s3')
+    
+    if not type(destination_files) is list:  # check type of destination
+        raise ValueError('destination_files has to be a list of paths')
+    # Check if the source and the destination are the correct sizes
+    assert len(source_files) == len(destination_files),ValueError('source and destination are the wrong size')
+    
+    res = Parallel(n_jobs = n_jobs)(delayed(copyfile_from_s3)(src,
+                                                              dst,
+                                                              storage = storage)
+                                    for src,dst in zip(source_files,destination_files))
+    return res
+
 
 def s3_delete_file(filepath,storage, remove_versions = False):
     '''
     Deletes files from s3.
 
     !!Warning!! this does not wait for confirmation.
-    
+    remove_versions = True will delete all versions from the bucket.
+
     Joao Couto - 2024
     '''
     

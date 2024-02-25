@@ -14,6 +14,7 @@ import hashlib
 from datetime import datetime
 import pathlib
 from joblib import delayed, Parallel
+import pickle
 
 # Look into running on g4dn.2xlarge
 
@@ -43,15 +44,23 @@ dataset_name_equivalence = dict(ephys ='ephys',
                                 deeplabcut = 'analysis',
                                 analysis = 'analysis',
                                 caiman = 'analysis')
+analysis = dict(spks = 'labdata.compute.SpksCompute')
 
 default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],
+                                   scratch_path = str(Path.home()/'scratch'),
                                    path_rules='{subject_name}/{session_name}/{dataset_name}', # to read the session/dataset from a path
                                    queues= None,
+                                   allow_s3_download = False,
                                    compute = dict(aws=dict(access_key = None,
                                                            secret_key = None,
-                                                           region = 'us-west-2')),
-                                   compute_containers = dict(local_path = str(Path.home()/
-                                                                              Path('labdata')/'containers')),
+                                                           region = 'us-west-2',
+                                                           # check the instructions for how to create the AMI
+                                                           image_ids = dict(linux = dict(ami = 'ami-0a1aa46f0630cf2c4', 
+                                                                                         user = 'ubuntu')),
+                                                           access_key_folder = str(Path.home()/Path('labdata')/'ec2keys')),
+                                                  containers = dict(local_path = str(Path.home()/Path('labdata')/'containers')),
+                                                  analysis = analysis,
+                                                  default_target = 'slurm'),
                                    storage = dict(ucla_data = dict(protocol = 's3',
                                                                    endpoint = 's3.amazonaws.com:9000',
                                                                    bucket = 'churchland-ucla-data',
@@ -64,7 +73,7 @@ default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],
                                        'database.password': None,
                                        'database.name': 'lab_data'},
                                    plugins_folder = str(Path.home()/
-                                                        Path('labdata')/'plugins'),
+                                                        Path('labdata')/'plugins'), # this can be removed?
                                    submit_defaults = None,
                                    run_defaults = {'delete-cache':False},
                                    upload_path = None,           # this is the path to the local computer that writes to s3

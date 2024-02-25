@@ -216,13 +216,14 @@ class ComputeTask(dj.Manual):
     job_id                  : int auto_increment
     ---
     task_waiting = 1         : tinyint             # 1 if the job is up for grabs
+    task_name = NULL         : varchar(52)         # what task to run
     task_status = NULL       : varchar(52)         # status of the job (did it fail?)
     task_target = NULL       : varchar(52)         # where to run the job, so it only runs where selected
     task_host = NULL         : varchar(52)         # where the job is running
-    task_cmd = NULL          : varchar(500)        # command to run
-    task_post_cmd = NULL     : varchar(500)        # command to run after the job finishes
-    task_log = NULL          : varchar(500)        # LOG
-    -> [nullable] Dataset                         # dataset
+    task_cmd = NULL          : varchar(2000)       # command to run
+    task_parameters = NULL   : varchar(2000)       # command to run after the job finishes
+    task_log = NULL          : varchar(2000)       # LOG
+    -> [nullable] Dataset                          # dataset
     '''
     
     class AssignedFiles(dj.Part):

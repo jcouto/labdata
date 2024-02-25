@@ -16,8 +16,8 @@ Data manipulation commands are:
 
 Data analysis commands:
 
-            run <analysis> -a <subject> -s <session>        Runs an analysis
-            job <analysis> -a <subject> -s <session>        Runs an analysis as a job
+            run <analysis> -a <subject> -s <session>        Runs an analysis, local, queued or on AWS
+            job <analysis> -a <subject> -s <session>        Allocate an analysis, does not run
 
 Server commands (don't run on experimental computers):
             upload                                          Sends pending data to S3 (applies upload rules)
@@ -49,17 +49,51 @@ Server commands (don't run on experimental computers):
             w = LABDATA_PUT()
             sys.exit(app.exec_())
  
-            
+    def run(self):
+        parser = argparse.ArgumentParser(
+            description = 'Allocates or runs an analysis',
+            usage = '''labdata run <ANALYSIS> -a <SUBJECT> -s <SESSION>''')
+        parser.add_argument('analysis',action = 'store',default = '',type = str)
+        parser.add_argument('-j','--job',action = 'store',default = None, type = int)
+        parser.add_argument('-t','--target',action = 'store',default = prefs['compute']['default_target'], type = str)
+        parser = self._add_default_arguments(parser)
+
+        secondary_args = None
+        argum = sys.argv[2:]
+        if '--' in sys.argv:
+            argum = sys.argv[2:sys.argv.index('--')]
+            secondary_args = sys.argv[sys.argv.index('--'):]
+        args = parser.parse_args(argum)
+        from .compute import parse_analysis
+        # parse analysis will check if the analysis is defined
+        parse_analysis(analysis = args.analysis,
+                       job_id = args.job, # this will become un-used.
+                       subject = args.subject,
+                       session = args.session,
+                       datatype = args.datatype,
+                       secondary_args = secondary_args,
+                       full_command = ' '.join(sys.argv[1:]))
+
+    def task(self):
+        parser = argparse.ArgumentParser(
+            description = 'Runs a ComputeTask',
+            usage = '''labdata task <JOB_ID> ''')
+        parser.add_argument('job_id',action = 'store',default = None,type = int)
+        args = parser.parse_args(sys.argv[2:])
+        job_id = args.job_id
+        from .compute import handle_job
+        handle_job(job_id)
+        
     def _add_default_arguments(self, parser):
         parser.add_argument('-a','--subject',
                             action='store',
-                            default=[''], type=str,nargs='+')
+                            default=None, type=str,nargs='+')
         parser.add_argument('-s','--session',
                             action='store',
-                            default=[''], type=str,nargs='+')
+                            default=None, type=str,nargs='+')
         parser.add_argument('-d','--datatype',
                             action='store',
-                            default=[''], type=str,nargs='+')
+                            default=None, type=str,nargs='+')
         return parser
             
     def _get_default_arg(self,argument,cli_arg = 'submit', default = None):

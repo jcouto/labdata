@@ -42,5 +42,9 @@ def build_singularity_container(definition_file,
 
     return image
 
-def run_on_singularity():
-    pass
+def run_on_singularity(container, command, cuda = False):
+    from spython.main import Client
+    containerfile = Path(prefs['compute_containers']['local_path'])/'labdata-kilosort2_5.sif'
+    if containerfile.exists():
+        client = Client.execute(image = containerfile, command = 'nvidia-smi', nv=True)
+    
