@@ -111,7 +111,7 @@ Can submit job on slurm, some of these can be long or take resources.
             self.set_job_status(job_status = 'FAILED',job_log = 'MD5 CHECKSUM failed; check file transfer.')
             return # exit.
         try:
-            self._apply_rule() # can use the src_paths
+            paths = self._apply_rule() # can use the src_paths
         except Exception as err:
             # log the error
             print('There was an error processing this dataset.')
@@ -121,7 +121,8 @@ Can submit job on slurm, some of these can be long or take resources.
         # compare the hashes after
         self._upload()
         self._post_upload() # so the rules can insert tables and all.
-        
+        return paths # so apply can output paths.
+    
     def set_job_status(self, job_status = 'FAILED',job_log = '',job_waiting = 0):
         from ..schema import UploadJob
         if not self.job_id is None:

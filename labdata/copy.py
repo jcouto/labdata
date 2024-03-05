@@ -91,11 +91,11 @@ def copy_to_upload_server(filepaths, local_path = None, server_path = None,
                 Subject.insert1(kwargs, skip_duplicates = True,ignore_extra_fields = True) # try to insert subject
                 # needs date of birth and gender
             if not len(Session() & dict(subject_name=kwargs['subject_name'],
-                                        session_name = 'session_name')):
+                                        session_name = kwargs['session_name'])):
                 Session.insert1(kwargs, skip_duplicates = True,ignore_extra_fields = True) # try to insert session
-            if not len(Dataset() & dict(subject_name=kwargs['subject_name'],
-                                        session_name = 'session_name',
-                                        dataset_name = 'dataset_name')):
+            if not len(Dataset() & dict(subject_name = kwargs['subject_name'],
+                                        session_name = kwargs['session_name'],
+                                        dataset_name = kwargs['dataset_name'])):
                 Dataset.insert1(kwargs, skip_duplicates = True,ignore_extra_fields = True) # try to insert dataset
         jobid = UploadJob().fetch('job_id')
         if len(jobid):

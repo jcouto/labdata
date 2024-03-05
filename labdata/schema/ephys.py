@@ -66,7 +66,7 @@ class ProbeConfiguration(dj.Manual):
         for c in configs:
             if ((c['channel_coords'] == conf['channel_coords']).all() and
                 (c['channel_idx'] == conf['channel_idx']).all()):
-                print("The coords are the same, probe is already in there ")
+                print("The coords are the same, probe is already there. ")
                 
                 return dict(probe_id = probeid,
                             configuration_id = c['configuration_id'],

@@ -17,7 +17,8 @@ class EphysRule(UploadRule):
         
         new_files = np.stack(res).flatten() # stack the resulting files and add them to the path
         self._handle_processed_and_src_paths(files_to_compress, new_files)
-
+        return self.src_paths
+    
     def _post_upload(self):
         if not self.dataset_key is None:
             from ..schema import EphysRecording 
