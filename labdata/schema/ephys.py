@@ -118,8 +118,10 @@ class EphysRecording(dj.Imported):
         Adds a recording from Dataset ap.meta files.
         '''
         from ..schema import EphysRecording
+        allpaths = pd.DataFrame((Dataset.DataFiles() & key).fetch()).file_path.values
         paths = natsorted(list(filter( lambda x: x.endswith('.ap.meta'),
-                              pd.DataFrame((Dataset.DataFiles() & key).fetch()).file_path.values)))
+                                       allpaths)))
+        keys = []
         local_path = Path(prefs['local_paths'][0])
         for iprobe, p in enumerate(paths):
             # add each configuration
@@ -134,7 +136,7 @@ class EphysRecording(dj.Imported):
                                                 skip_duplicates = True,
                                                 allow_direct_insert = True)
             # only working for spikeglx files for the moment.
-            pfiles = list(filter(lambda x: f'imec{iprobe}.ap.' in x,paths)) 
+            pfiles = list(filter(lambda x: f'imec{iprobe}.ap.' in x,allpaths))
             EphysRecording.ProbeFile().insert([
                 dict(tt,
                      **(File() & f'file_path = "{fi}"').proj().fetch(as_dict = True)[0])
@@ -243,7 +245,7 @@ class SpikeSorting(dj.Manual):
         -> SpikeSorting.Unit
         ---
         waveform_median   :  longblob         # average waveform
-        -> AnalysisFile
+        -> AnalysisFile.proj(waveforms_file='file_path')
         '''
 
 @dataschema
