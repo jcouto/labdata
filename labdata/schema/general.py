@@ -21,12 +21,24 @@ dataschema = dj.schema(dj.config['database.name'])
 class File(dj.Manual):
     definition = '''
     file_path                 : varchar(300)  # Path to the file
-    storage                   : varchar(12)   # storage name 
+    storage = "ucla_data"     : varchar(12)   # storage name 
     ---
     file_datetime             : datetime      # date created
     file_size                 : double        # using double because int64 does not exist
     file_md5 = NULL           : varchar(32)   # md5 checksum
     '''
+
+@dataschema 
+class AnalysisFile(dj.Manual):
+    definition = '''
+    file_path                 : varchar(300)  # Path to the file
+    storage = "analysis"      : varchar(12)   # storage name 
+    ---
+    file_datetime             : datetime      # date created
+    file_size                 : double        # using double because int64 does not exist
+    file_md5 = NULL           : varchar(32)   # md5 checksum
+    '''
+    
 # this table stores file name and checksums of files that were sent to upload but were processed by upload rules
 @dataschema
 class ProcessedFile(dj.Manual): 

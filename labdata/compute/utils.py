@@ -26,7 +26,7 @@ def parse_analysis(analysis, job_id = None,
                    full_command = None,
                    **kwargs):
 
-    obj = load_analysis_object(job_id)
+    obj = load_analysis_object(analysis)(job_id)
     obj.secondary_parse(secondary_args)
     if obj.job_id is None:
         # then we have to create jobs and assign

@@ -182,19 +182,12 @@ class EphysRecordingNoiseStats(dj.Computed):
 @dataschema
 class EphysAnalysisParams(dj.Manual):
     definition = '''
-    algorithm_name         : varchar(52)   # Preprocessing Spike sorting algorithm 
-    parameter_set_num      : int           # Parameters
+    parameter_set_num      : int            # number of the parameters set
     ---
-    code_link = NULL        : varchar(300)   #  the software that preprocesses and sorts
+    algorithm_name         : varchar(64)    # preprocessing  and spike sorting algorithm 
+    parameters_dict        : varchar(2000)  # parameters json formatted dictionary
+    code_link = NULL       : varchar(300)   # the software that preprocesses and sorts
     '''
-    class Parameters(dj.Part):
-        definition = '''
-        -> master
-        param_name          : varchar(52)  # name of the parameter
-        ---
-        param_value         : varchar(52)  # value of the parameter
-        param_cast = NULL   : varchar(52)  # datatype name to cast the parameter
-        '''
 
 @dataschema
 class SpikeSorting(dj.Manual):
@@ -210,6 +203,15 @@ class SpikeSorting(dj.Manual):
     channel_coords = NULL             : longblob   # channel_positions
    '''
     
+    class Segment(dj.Part):
+        definition = '''
+        -> master
+        segment_num                   : int  # number of the segment
+        ---
+        offset_samples                : int         # offset where the traces comes from
+        segment                       : longblob    # 2 second segment of data in the AP band
+        '''
+        
     class Unit(dj.Part):
         definition = '''
         -> master
@@ -232,7 +234,7 @@ class SpikeSorting(dj.Manual):
        -> SpikeSorting
        ---
        pc_features_idx = NULL   : longblob    # template index for each pc feature
-       template = NULL          : longblob    # templates
+       templates = NULL          : longblob    # templates
        whitening_matrix = NULL  : longblob    # whitening_matrix_inv.npy
        '''
        
@@ -240,9 +242,8 @@ class SpikeSorting(dj.Manual):
         definition = '''
         -> SpikeSorting.Unit
         ---
-        waveform_mean      :  longblob         # average waveform
-        waveforms          :  longblob         # 500 example waveforms from the start of the recording, 500 from the end
-        waveforms_indices  :  longblob         # indice of the spikes for the waveform
+        waveform_median   :  longblob         # average waveform
+        -> AnalysisFile
         '''
 
 @dataschema
@@ -256,4 +257,5 @@ class UnitMetrics(dj.Computed):
    isi_violations = NULL    : float
    amplitude_cutoff = NULL  : float
    '''
+
 #   #
