@@ -10,13 +10,14 @@ class EphysRule(UploadRule):
         files_to_compress = list(filter(lambda x: '.ap.bin' in x, self.src_paths.src_path.values))
         n_jobs = DEFAULT_N_JOBS
         # compress these in parallel, will work for multiprobe sessions faster?
-        res = Parallel(n_jobs = n_jobs)(delayed(compress_ephys_file)(
-            filename,
-            local_path = self.local_path,
-            n_jobs = n_jobs) for filename in files_to_compress)
-        
-        new_files = np.stack(res).flatten() # stack the resulting files and add them to the path
-        self._handle_processed_and_src_paths(files_to_compress, new_files)
+        if len(files_to_compress): # in some cases data might have already been compressed
+            res = Parallel(n_jobs = n_jobs)(delayed(compress_ephys_file)(
+                filename,
+                local_path = self.local_path,
+                n_jobs = n_jobs) for filename in files_to_compress)
+            
+            new_files = np.stack(res).flatten() # stack the resulting files and add them to the path
+            self._handle_processed_and_src_paths(files_to_compress, new_files)
         return self.src_paths
     
     def _post_upload(self):
