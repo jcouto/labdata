@@ -15,7 +15,6 @@ class EphysRule(UploadRule):
                 filename,
                 local_path = self.local_path,
                 n_jobs = n_jobs) for filename in files_to_compress)
-            
             new_files = np.stack(res).flatten() # stack the resulting files and add them to the path
             self._handle_processed_and_src_paths(files_to_compress, new_files)
         return self.src_paths
