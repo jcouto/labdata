@@ -27,6 +27,41 @@ class File(dj.Manual):
     file_size                 : double        # using double because int64 does not exist
     file_md5 = NULL           : varchar(32)   # md5 checksum
     '''
+    # Files get deleted from AWS if the user has permissions
+    def delete(
+            self,
+            transaction = True,
+            safemode  = None,
+            force_parts = False):
+        
+        from ..s3 import s3_delete_file
+        from tqdm import tqdm
+        filesdict = [f for f in self]
+        super().delete(transaction = transaction,
+                       safemode = safemode,
+                       force_parts = force_parts)
+        if len(self) == 0:
+            files_not_deleted = []
+            for s in tqdm(filesdict,desc = f'Deleting objects from s3 {s["storage"]}:'):
+                try:
+                    s3_delete_file(s['file_path'],
+                                   storage = prefs['storage'][s['storage']],
+                                   remove_versions = True)
+                except Exception as err:
+                    print(f'Could not delete {s["file_path"]}.')
+                    files_not_deleted.append(s['file_path'])
+            if len(files_not_deleted):
+                print('\n'.join(files_not_deleted))
+                raise(ValueError('''
+
+[Integrity error] Files were deleted from the database but not from AWS.
+
+            Save this message and show it to your database ADMIN.
+
+{0}
+                
+'''.format('\n'.join(files_not_deleted))))
+                    
 
 @dataschema 
 class AnalysisFile(dj.Manual):
@@ -38,8 +73,58 @@ class AnalysisFile(dj.Manual):
     file_size                 : double        # using double because int64 does not exist
     file_md5 = NULL           : varchar(32)   # md5 checksum
     '''
-    
-# this table stores file name and checksums of files that were sent to upload but were processed by upload rules
+    storage = 'analysis'
+
+    # All users with permission to run analysis should also have permission to add and remove files from AWS
+    def upload_files(self,src,dataset):
+        assert 'subject_name' in dataset.keys(), ValueError('dataset must have subject_name')
+        assert 'session_name' in dataset.keys(), ValueError('dataset must have session_name')
+        assert 'dataset_name' in dataset.keys(), ValueError('dataset must have dataset_name')
+        
+        destpath = '{subject_name}/{session_name}/{dataset_name}/'.format(**dataset)
+        dst = [destpath+k.name for k in src]
+        for d in dst:
+            assert len(AnalysisFile() & dict(file_path = d)) == 0, ValueError(
+                f'File is already in database, delete it to re-upload {d}.')
+
+        assert self.storage in prefs['storage'].keys(),ValueError(
+            'Specify an {self.storage} bucket in preferences["storage"].')
+        from ..s3 import copy_to_s3
+
+        copy_to_s3(src, dst, md5_checksum=None, storage_name = self.storage)
+        dates = [datetime.utcfromtimestamp(Path(f).stat().st_mtime) for f in src]
+        sizes = [Path(f).stat().st_size for f in src]
+        md5 = compute_md5s(src)
+        # insert in AnalysisFile if all went well
+        self.insert([dict(file_path = f,
+                          storage = self.storage,
+                          file_datetime = d,
+                          file_md5 = m,
+                          file_size = s) for f,d,s,m in zip(dst,dates,sizes,md5)])
+        return [dict(file_path = f,storage = self.storage) for f in dst]
+
+    def delete(
+            self,
+            transaction = True,
+            safemode  = None,
+            force_parts = False):
+        
+        from ..s3 import s3_delete_file
+        from tqdm import tqdm
+        filesdict = [f for f in self]
+        super().delete(transaction = transaction,
+                       safemode = safemode,
+                       force_parts = force_parts)
+        # remove from S3
+        if len(self) == 0:
+            for s in tqdm(filesdict,desc = 'Deleting objects from s3:'):
+                s3_delete_file(s['file_path'],
+                               storage = prefs['storage'][s['storage']],
+                               remove_versions = True)
+
+        
+# This table stores file name and checksums of files that were sent to upload but were processed by upload rules
+# There are no actual files associated with these paths
 @dataschema
 class ProcessedFile(dj.Manual): 
     definition = '''

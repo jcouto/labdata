@@ -8,7 +8,7 @@ def load_analysis_object(analysis):
     import labdata
     return eval(prefs['compute']['analysis'][analysis])
 
-def handle_job(job_id):
+def handle_compute(job_id):
     from ..schema import ComputeTask
     jobinfo = pd.DataFrame((ComputeTask() & dict(job_id = job_id)).fetch())
     if not len(jobinfo):
@@ -93,7 +93,34 @@ class BaseCompute():
                     # that should just be a problem to fix
                     raise ValueError(f'job_id {self.job_id} does not exist.')
                     
-            
+    def get_files(self, dset, allowed_extensions=[]):
+        '''
+        Gets the paths and downloads from S3 if needed.
+        '''
+        
+        files = dset.file_path.values
+        storage = dset.storage.values
+        localpath = Path(prefs['local_paths'][0])
+        self.files_existed = True
+        localfiles = np.unique([find_local_filepath(f,
+                                                    allowed_extensions = allowed_extensions) for f in files])
+        if not len(localfiles):
+            # then you can try downloading the files
+            if self.allow_s3: # get the files from s3
+                from ..s3 import copy_from_s3
+                for s in np.unique(storage):
+                    # so it can work with multiple storages
+                    srcfiles = files[storage == s]
+                    dstfiles = [localpath/f for f in srcfiles]
+                    copy_from_s3(srcfiles,dstfiles,storage = s)
+                localfiles = np.unique([find_local_filepath(f,
+                                                            allowed_extensions = allowed_extensions) for f in files])
+                if len(localfiles): self.files_existed = False # delete the files in the end if they were not local.
+            else:
+                print(files, localpath)
+                raise(ValueError('Files not found locally, set allow_s3 in the preferences to download.'))
+        return localfiles
+
 
     def place_tasks_in_queue(self,datasets,task_cmd = None):
         ''' This will put the tasks in the queue for each dataset.
@@ -204,9 +231,6 @@ class BaseCompute():
         
     def compute(self):
         '''This calls the compute function. If "use_s3" is true it will download the files from s3 when needed.'''
-        
-        
-        
         try:
             self._compute() # can use the src_paths
         except Exception as err:

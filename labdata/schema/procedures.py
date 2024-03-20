@@ -63,7 +63,6 @@ class Death(dj.Manual):
     definition = """
     -> Subject
     ---
-    death_date:                  date       # death date
-    death_ts=CURRENT_TIMESTAMP:  timestamp
+    death_date :          datetime       # death date
     -> [nullable] Note
     """

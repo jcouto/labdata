@@ -24,7 +24,7 @@ class DecisionTask(dj.Imported): # imported because if comes from data but there
         n_performed              : int         # number of self-performed trials
         n_with_choice            : int         # number of self-initiated trials with choice 
         n_correct                : int         # number of correct trials
-        performance_easy         : float       # performance on easy trials
+        performance_easy = NULL  : float       # performance on easy trials
         performance              : float       # performance on all trials
         trial_num                : longblob    # trial number because TrialSets can be intertwined
         initiation_times = NULL  : longblob    # time between trial start and stim onset

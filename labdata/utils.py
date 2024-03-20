@@ -66,7 +66,13 @@ default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],
                                                                    bucket = 'churchland-ucla-data',
                                                                    folder = '',
                                                                    access_key = None,
-                                                                   secret_key = None)),
+                                                                   secret_key = None),
+                                                  analysis = dict(protocol = 's3',
+                                                                  endpoint = 's3.amazonaws.com:9000',
+                                                                  bucket = 'churchland-ucla-analysis',
+                                                                  folder = '',
+                                                                  access_key = None,
+                                                                  secret_key = None)),
                                    database = {
                                        'database.host':'churchland-ucla-data.cxis684q8epg.us-west-1.rds.amazonaws.com',
                                        'database.user': None,
@@ -233,5 +239,79 @@ def plugin_lazy_import(name):
 
 
 def extrapolate_time_from_clock(master_clock,master_events, slave_events):
+    '''
+    Extrapolates the time for synchronizing events on different streams
+    '''
     from scipy.interpolate import interp1d
-    return interp1d(master_events,master_clock,fill_value='extrapolate')(slave_events)
+    return interp1d(master_events, master_clock, fill_value='extrapolate')(slave_events)
+
+
+def save_dict_to_h5(filename,dictionary,compression = 'gzip', compression_opts = 1, compression_size_threshold = 1000):
+    '''
+    Save a dictionary as a compressed hdf5 dataset.
+    filename: path to the file (IMPORTANT: this WILL overwrite without checks.)
+    dictionary: the dictionary to save
+
+    If the size of the data are larger than compression_size_threshold it will save with compression.
+    default compression is gzip, can also use lzf
+
+    Joao Couto - 2023
+    '''
+    def _save_dataset(f,key,val,
+                      compression = compression,
+                      compression_size_threshold = compression_size_threshold):
+        # compress if big enough.
+                
+        if np.size(val)>compression_size_threshold:
+            extras = dict(compression = compression,
+                          chunks = True, 
+                          shuffle = True)
+            if compression == 'gzip':
+                extras['compression_opts'] = compression_opts
+        else:
+            extras = dict()
+        f.create_dataset(str(key),data = val, **extras)
+
+    import h5py
+    keys = []
+    values = []
+    for k in dictionary.keys():
+        if not type(dictionary[k]) in [dict]:
+            keys.append(k)
+            values.append(dictionary[k])
+        else:
+            for o in dictionary[k].keys():
+                keys.append(k+'/'+str(o))
+                values.append(dictionary[k][o])
+    filename = Path(filename)
+    # create file, this will overwrite without asking.
+    with h5py.File(filename,'w') as f:
+        for k,v in tqdm(zip(keys,values),total = len(keys),desc = f"Saving to hdf5 {filename.name}"):
+            _save_dataset(f = f,key = k,val = v) 
+
+def load_dict_from_h5(filename):
+    ''' 
+    Loads a dictionary from hdf5 file.
+    
+    This is also in spks.
+
+    Joao Couto - spks 2023
+
+    '''
+    data = {}
+    import h5py
+    with h5py.File(filename,'r') as f:
+        for k in f.keys(): #TODO: read also attributes.
+            no = k
+            if no[0].isdigit():
+                no = int(k)
+            if hasattr(f[k],'dims'):
+                data[no] = f[k][()]
+            else:
+                data[no] = dict()
+                for o in f[k].keys(): # is group
+                    ko = o
+                    if o[0].isdigit():
+                        ko = int(o)
+                    data[no][ko] = f[k][o][()]
+    return data

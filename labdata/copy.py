@@ -128,5 +128,30 @@ def any_path_uploaded(filepaths):
         if len((ProcessedFile() & f'file_path = "{p}"'))>0:
             return True
     return False # Otherwise return False
-            
+                    
+
+def process_upload_jobs(key = None, rule = 'all',n_jobs = 8):
+    '''
+    Process UploadJobs using UploadRule(s).
+    
+    '''
+    from tqdm import tqdm
+    from .schema import UploadJob
+    def _job(j,rule = None):
+        from .rules import UploadRule, EphysRule
+        jb = (UploadJob() & f'job_id = {j}').fetch()
+        if len(jb):
+            if jb['job_rule'] == 'ephys' and rule in ['all','ephys']:
+                rl = EphysRule(j)
+                res = rl.apply()
+            else:
+                rl = UploadRule(j)
+                res = rl.apply()
+        return res
+    if key is None:
+        jobs = UploadJob().fetch('job_id')
+    else:
+        jobs = (UploadJob() & key).fetch('job_id')
         
+    res = Parallel(backend='loky',n_jobs = n_jobs)(delayed(_job)(u,rule = rule) for u in tqdm(jobs))
+    return res

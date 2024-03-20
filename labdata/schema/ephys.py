@@ -182,7 +182,7 @@ class EphysRecordingNoiseStats(dj.Computed):
 
     
 @dataschema
-class EphysAnalysisParams(dj.Manual):
+class SpikeSortingParams(dj.Manual):
     definition = '''
     parameter_set_num      : int            # number of the parameters set
     ---
@@ -195,23 +195,33 @@ class EphysAnalysisParams(dj.Manual):
 class SpikeSorting(dj.Manual):
     definition = '''
     -> EphysRecording.ProbeSetting
-    -> EphysAnalysisParams
+    -> SpikeSortingParams
     ---
     n_pre_samples                     : smallint   # to compute the waveform time 
     n_sorted_units    = NULL          : int        # number of sorted units
     n_detected_spikes = NULL          : int        # number of detected spikes
-    sorting_datetime = NULL           : datetime   # date of the spike sorting analysis
-    channel_indices = NULL            : longblob   # channel_map
-    channel_coords = NULL             : longblob   # channel_positions
+    sorting_datetime  = NULL          : datetime   # date of the spike sorting analysis
+    channel_indices   = NULL          : longblob   # channel_map
+    channel_coords    = NULL          : longblob   # channel_positions
+    -> [nullable] AnalysisFile.proj(features_file='file_path')
+    -> [nullable] AnalysisFile.proj(waveforms_file='file_path')
    '''
+    # For each sorting, create a "features.hdf5" file that has the: (this file can be > 4Gb)
+    #    - template features
+    #    - cluster indices
+    #    - whitening_matrix
+    #    - templates 
+    # For each sorting create a "waveforms.hdf5" file that has the: (this file can be > 10Gb)
+    #   - filtered waveform samples for each unit (1000 per unit)
+    #   - indices of the extracted waveforms
     
     class Segment(dj.Part):
         definition = '''
         -> master
-        segment_num                   : int  # number of the segment
+        segment_num               : int  # number of the segment
         ---
-        offset_samples                : int         # offset where the traces comes from
-        segment                       : longblob    # 2 second segment of data in the AP band
+        offset_samples            : int         # offset where the traces comes from
+        segment                   : longblob    # 2 second segment of data in the AP band
         '''
         
     class Unit(dj.Part):
@@ -220,32 +230,15 @@ class SpikeSorting(dj.Manual):
         unit_id                  : int       # cluster id
         ---
         spike_times              : longblob  # in samples (uint64)
-        spike_positions = NULL   : longblob  # spike position in the electrode
+        spike_positions  = NULL  : longblob  # spike position in the electrode (float32)
+        spike_amplitudes = NULL  : longblob  # spike template amplitudes (float32)
         '''
         
-    class Features(dj.Part):
-        definition = '''
-        -> SpikeSorting.Unit
-        ---
-        amplitudes = NULL  : longblob        # template amplitudes for each unit
-        pc_features = NULL : longblob        # Principal Component features
-        '''
-
-    class Templates(dj.Part):
-       definition = '''
-       -> SpikeSorting
-       ---
-       pc_features_idx = NULL   : longblob    # template index for each pc feature
-       templates = NULL          : longblob    # templates
-       whitening_matrix = NULL  : longblob    # whitening_matrix_inv.npy
-       '''
-       
     class Waveforms(dj.Part):
         definition = '''
         -> SpikeSorting.Unit
         ---
-        waveform_median   :  longblob         # average waveform
-        -> AnalysisFile.proj(waveforms_file='file_path')
+        waveform_median   :  longblob         # average waveform (gain corrected in microvolt - float32)
         '''
 
 @dataschema
