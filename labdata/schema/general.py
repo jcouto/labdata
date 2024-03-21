@@ -42,14 +42,17 @@ class File(dj.Manual):
                        force_parts = force_parts)
         if len(self) == 0:
             files_not_deleted = []
-            for s in tqdm(filesdict,desc = f'Deleting objects from s3 {s["storage"]}:'):
+            storage = filesdict[0]["storage"]
+            for s in tqdm(filesdict,desc = f'Deleting objects from s3 {"storage"}:'):
+                fname = s["file_path"]
                 try:
-                    s3_delete_file(s['file_path'],
+                    s3_delete_file(fname,
                                    storage = prefs['storage'][s['storage']],
                                    remove_versions = True)
+                    
                 except Exception as err:
-                    print(f'Could not delete {s["file_path"]}.')
-                    files_not_deleted.append(s['file_path'])
+                    print(f'Could not delete {fname}.')
+                    files_not_deleted.append(fname)
             if len(files_not_deleted):
                 print('\n'.join(files_not_deleted))
                 raise(ValueError('''
