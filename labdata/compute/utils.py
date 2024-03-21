@@ -242,14 +242,13 @@ class BaseCompute():
         self._post_compute() # so the rules can insert tables and all.
         
     def set_job_status(self, job_status = 'FAILED',job_log = '',job_waiting = 0):
-        from ..schema import UploadJob
+        from ..schema import ComputeTask
         if not self.job_id is None:
-            # recomputing md5s
             ComputeTask.update1(dict(job_id = self.job_id,
-                                    job_waiting = job_waiting,
-                                    job_host = prefs['hostname'], # so we know where it failed.
-                                    job_status = job_status,
-                                    job_log = job_log))
+                                     task_waiting = job_waiting,
+                                     task_host = prefs['hostname'], # so we know where it failed.
+                                     task_status = job_status,
+                                     task_log = job_log))
             if not 'WORK' in job_status: # display the message
                 print(f'Check job_id {self.job_id} : {job_status}')
 
