@@ -15,9 +15,8 @@ class SpksCompute(BaseCompute):
                                thresholds = [9.,3.])
         self.parameter_set_num = None # identifier in EphysAnalysisParams
         self._init_job()
-        self.add_parameter_key()
-
-
+        if not self.job_id is None:
+            self.add_parameter_key()
 
     def add_parameter_key(self):
         parameter_set_num = None
@@ -41,14 +40,15 @@ class SpksCompute(BaseCompute):
                                                code_link = self.url),
                                           skip_duplicates=True)
         self.parameter_set_num = parameter_set_num
-
         recordings = EphysRecording.ProbeSetting() & dict(self.dataset_key)
         sortings = SpikeSorting() & dict(self.dataset_key)
         if len(recordings) == len(sortings):
+            self.set_job_status(
+                job_status = 'FAILED',
+                job_waiting = 0,
+                job_log = f'{self.dataset_key} was already sorted with parameters {self.parameter_set_num}.')    
             raise(ValueError(f'{self.dataset_key} was already sorted with parameters {self.parameter_set_num}.'))
-        
-
-        
+           
     def _secondary_parse(self,arguments):
         '''
         Handles parsing the command line interface
@@ -90,7 +90,7 @@ class SpksCompute(BaseCompute):
         Searches for subjects and sessions in EphysRecording
         '''
         if subject_name is None and session_name is None:
-            print("Please specify an animal or a session to perform spike-sorting.")
+            print("\n\nPlease specify a 'subject_name' and a 'session_name' to perform spike-sorting.\n\n")
         keys = []
         if not subject_name is None:
             if len(subject_name) > 1:
@@ -110,12 +110,12 @@ class SpksCompute(BaseCompute):
             datasets += (EphysRecording()& k).proj('subject_name','session_name','dataset_name').fetch(as_dict = True)
         return datasets
         
-    
     def _compute(self):
         from ..schema import EphysRecording
         datasets = pd.DataFrame((EphysRecording.ProbeFile() & self.dataset_key).fetch())
 
         for probe_num in np.unique(datasets.probe_num):
+            self.set_job_status(job_log = f'Sorting {probe_num}')
             files = datasets[datasets.probe_num.values == probe_num]
             dset = []
             for i,f in files.iterrows():
@@ -146,15 +146,21 @@ class SpksCompute(BaseCompute):
                                          thresholds = self.parameters['thresholds'],
                                          lowpass = self.parameters['low_pass'],
                                          highpass = self.parameters['high_pass'])
+            elif self.parameters['algorithm_name'] == 'spks_mountainsort5':
+                raise(NotImplemented(f"Algorithm {self.parameters['algorithm_name']} not implemented."))
             else:
                 raise(NotImplemented(f"Algorithm {self.parameters['algorithm_name']} not implemented."))
+            self.set_job_status(job_log = f'Probe {probe_num} sorted, running post-processing.')
             self.postprocess_and_insert(results_folder,
                                         probe_num = probe_num,
                                         remove_duplicates = True,
                                         n_pre_samples = 45)
                 
-    def postprocess_and_insert(self,results_folder,probe_num,
-                               remove_duplicates = True, n_pre_samples = 45):
+    def postprocess_and_insert(self,
+                               results_folder,
+                               probe_num,
+                               remove_duplicates = True,
+                               n_pre_samples = 45):
         '''Does the preprocessing for a spike sorting and inserts'''
         from spks import Clusters
         if remove_duplicates:
@@ -196,10 +202,13 @@ class SpksCompute(BaseCompute):
         # extract the waveforms 
         udict = select_random_waveforms(udict, wpre = n_pre_samples, wpost = n_pre_samples)
         from tqdm import tqdm
+        binaryfile = list(Path(results_folder).glob("filtered_recording*.bin"))[0]
+        nchannels = clu.metadata['nchannels'] 
         res = get_waveforms_from_binary(binaryfile, nchannels, [u['waveform_indices'] for u in udict],
                                         wpre = n_pre_samples,
                                         wpost = n_pre_samples,
                                         n_jobs = n_jobs)
+        
         # utemp = get_waveforms_from_binary(binaryfile,nchannels,[u['waveform_indices'] for u in udict])
         median_waveforms = Parallel(backend='loky', n_jobs = n_jobs)(
             delayed(lambda x: np.median(x.astype(np.float32),axis = 0))(r) for r in tqdm(res))
@@ -215,12 +224,13 @@ class SpksCompute(BaseCompute):
 
         src = [Path(results_folder)/'waveforms.hdf5',Path(results_folder)/'features.hdf5']
         dataset = dict(**self.dataset_key)
-        parameter_set_num = 1
-        dataset['dataset_name'] = f'spike_sorting/{parameter_set_num}'
+        dataset['dataset_name'] = f'spike_sorting/{self.parameter_set_num}'
         from ..schema import AnalysisFile
         filekeys = AnalysisFile().upload_files(src,dataset)
-        ssdict['waveforms_file'] = file_keys[0]
-        ssdict['features_file'] = file_keys[1]
+        ssdict['waveforms_file'] = filekeys[0]['file_path']
+        ssdict['waveforms_storage'] = filekeys[0]['storage']
+        ssdict['features_file'] = filekeys[1]['file_path']
+        ssdict['features_storage'] = filekeys[1]['storage']
         # insert the syncs
         events = []
         stream_name = f'imec{probe_num}'
@@ -231,11 +241,15 @@ class SpksCompute(BaseCompute):
                                        stream_name = stream_name,
                                        event_name = str(k),
                                        event_values = clu.metadata[c][k].astype(np.uint64)))
+        from ..schema import SpikeSorting, SpikeSortingParams, EphysRecording, DatasetEvents
         if len(events):
             # Add stream
             DatasetEvents.insert1(dict(self.dataset_key,
-                                       stream_name = stream_name,skip_duplicates = True))
-            DatasetEvents.Digital.insert(events,skip_duplicates = True)
+                                       stream_name = stream_name),
+                                       skip_duplicates = True, allow_direct_insert = True)
+            DatasetEvents.Digital.insert(events,
+                                         skip_duplicates = True,
+                                         allow_direct_insert = True)
     
         # inserts
         # do all the inserts here
@@ -243,7 +257,7 @@ class SpksCompute(BaseCompute):
         logging.getLogger('datajoint').setLevel(logging.WARNING)
         # these can't be done in a safe way quickly so if they fail we have delete SpikeSorting
         SpikeSorting.insert1(ssdict,skip_duplicates = True)
-        # insert datajoint in parallel.
+        # Insert datajoint in parallel.
         Parallel(n_jobs = n_jobs)(delayed(SpikeSorting.Unit.insert1)(
             u,
             skip_duplicates=True,
@@ -252,9 +266,23 @@ class SpksCompute(BaseCompute):
             u,
             skip_duplicates=True,
             ignore_extra_fields = True) for u in tqdm(waves_dict));
+        # Add a segment from a random location.
+        from spks.io import map_binary
+        dat = map_binary(binaryfile,nchannels = nchannels)
+        nsamples = int(clu.sampling_rate*2)
+        offset_samples = int(np.random.uniform(nsamples, len(dat)-nsamples-1))
+        SpikeSorting.Segment.insert1(dict(base_key,
+                                          segment_num = 1,
+                                          offset_samples = offset_samples,
+                                          segment = np.array(dat[offset_samples : offset_samples + nsamples])))
+        del dat
+        self.set_job_status(job_log = f'Completed {base_key}')
         
-
-def select_random_waveforms(unit_dict,  wpre = 45, wpost = 45,  nmax_waves = 500):
+def select_random_waveforms(unit_dict,
+                            wpre = 45,
+                            wpost = 45,
+                            nmax_waves = 500):
+    
     duration = np.max([np.max(u['spike_times']) for u in unit_dict])
     for u in unit_dict:
         s = u['spike_times']
@@ -279,14 +307,19 @@ def get_spike_waveforms(data,indices,wpre = 45,wpost = 45):
         waves.append(np.array(np.take(data,idx+i,axis = 0)))
     return np.stack(waves,dtype = data.dtype)
 
-def get_waveforms_from_binary(binary_file, binary_file_nchannels, waveform_indices,
+def get_waveforms_from_binary(binary_file,
+                              binary_file_nchannels,
+                              waveform_indices,
                               wpre = 45,
                               wpost = 45,
                               n_jobs = 8):
     from tqdm import tqdm
+    from spks.io import map_binary
     dat = map_binary(binary_file,nchannels = binary_file_nchannels)
-    res = Parallel(backend='loky',n_jobs=n_jobs)(delayed(get_spike_waveforms)(dat,w,
-                                                                              wpre = wpre,
-                                                                              wpost = wpost) for w in tqdm(
-                                                                                  waveform_indices,desc = "Extracting waveforms"))
+    res = Parallel(backend='loky',n_jobs=n_jobs)(delayed(get_spike_waveforms)(
+        dat,
+        w,
+        wpre = wpre,
+        wpost = wpost) for w in tqdm(
+            waveform_indices,desc = "Extracting waveforms"))
     return res

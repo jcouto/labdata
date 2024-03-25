@@ -81,8 +81,10 @@ Server commands (don't run on experimental computers):
         parser.add_argument('job_id',action = 'store',default = None,type = int)
         args = parser.parse_args(sys.argv[2:])
         job_id = args.job_id
-        from .compute import handle_job
-        handle_job(job_id)
+        if not job_id is None:
+            from .compute import handle_compute
+            task = handle_compute(job_id)
+            task.compute()
         
     def _add_default_arguments(self, parser):
         parser.add_argument('-a','--subject',

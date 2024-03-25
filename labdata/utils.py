@@ -285,6 +285,7 @@ def save_dict_to_h5(filename,dictionary,compression = 'gzip', compression_opts =
                 values.append(dictionary[k][o])
     filename = Path(filename)
     # create file, this will overwrite without asking.
+    from tqdm import tqdm
     with h5py.File(filename,'w') as f:
         for k,v in tqdm(zip(keys,values),total = len(keys),desc = f"Saving to hdf5 {filename.name}"):
             _save_dataset(f = f,key = k,val = v) 

@@ -1,4 +1,5 @@
 from ..utils import *
+import traceback
 
 def load_analysis_object(analysis):
     if not analysis in prefs['compute']['analysis'].keys():
@@ -24,6 +25,7 @@ def parse_analysis(analysis, job_id = None,
                    session = [''],
                    secondary_args = None,
                    full_command = None,
+                   launch_singularity = False,
                    **kwargs):
 
     obj = load_analysis_object(analysis)(job_id)
@@ -37,12 +39,12 @@ def parse_analysis(analysis, job_id = None,
         if len(submittedjobs):
             print('A similar job is already submitted:')
             #print(submittedjobs)
-            #return
+            return
         datasets = obj.find_datasets(subject_name = subject,session_name = session)        
         job_ids = obj.place_tasks_in_queue(datasets,task_cmd = full_command)
         # now we have the job ids, need to figure out how to launch the jobs
         print(job_ids)
-
+    print(obj)
         
 # this class will execute compute jobs, it should be independent from the CLI but work with it.
 class BaseCompute():
@@ -57,6 +59,9 @@ class BaseCompute():
         
         self.job_id = job_id
         self.container = 'labdata-base'
+        if not self.job_id is None:
+            self._check_if_taken()
+            
         self.paths = None
         self.local_path = Path(prefs['local_paths'][0])
         self.scratch_path = Path(prefs['scratch_path'])
@@ -82,6 +87,8 @@ class BaseCompute():
                         print(job_status, flush = True)
                         return # exit.
                     else:
+                        self.set_job_status(job_status = 'WORKING',
+                                            job_waiting = 0)
                         par = json.loads(job_status[0]['task_parameters'])
                         for k in par.keys():
                             self.parameters[k] = par[k]
@@ -92,7 +99,7 @@ class BaseCompute():
                 else:
                     # that should just be a problem to fix
                     raise ValueError(f'job_id {self.job_id} does not exist.')
-                    
+
     def get_files(self, dset, allowed_extensions=[]):
         '''
         Gets the paths and downloads from S3 if needed.
@@ -126,13 +133,14 @@ class BaseCompute():
         ''' This will put the tasks in the queue for each dataset.
         If the task and parameters are the same it will return the job_id instead.
         '''
-        from ..schema import ComputeTask,Dataset,dj
+        from ..schema import ComputeTask, Dataset,dj
         job_ids = []
         for dataset in datasets:
             files = pd.DataFrame((Dataset.DataFiles() & dataset).fetch())
             idx = []
             for f in self.file_filters:
-                idx += list(filter(lambda x: not x is None,[i if f in s else None for i,s in enumerate(files.file_path.values)]))
+                idx += list(filter(lambda x: not x is None,[i if f in s else None for i,s in enumerate(
+                    files.file_path.values)]))
             if len(idx) == 0:
                 raise ValueError(f'Could not find valid Dataset.DataFiles for {dataset}')
             files = files.iloc[idx]
@@ -204,21 +212,20 @@ class BaseCompute():
                 'commands': commands
             })
 
-    def _take_the_job(self):
+    def _check_if_taken(self):
         if not self.job_id is None:
             from ..schema import ComputeTask, File, dj
-            with dj.conn().transaction:
-                self.jobquery = (ComputeTask() & dict(job_id = self.job_id))
-                job_status = self.jobquery.fetch(as_dict = True)
-                if len(job_status):
-                    if job_status[0]['job_waiting']:
-                        self.set_job_status(job_status = 'RUNNING', job_waiting = 0) # take the job
-                    else:
-                        print(f"Job {self.job_id} is already taken.")
-                        print(job_status, flush = True)
-                        return # exit.
+            self.jobquery = (ComputeTask() & dict(job_id = self.job_id))
+            job_status = self.jobquery.fetch(as_dict = True)
+            if len(job_status):
+                if job_status[0]['task_waiting']:
+                    return
                 else:
-                    raise ValueError(f'job_id {self.job_id} does not exist.')
+                    print(job_status, flush = True)
+                    raise ValueError(f'job_id {self.job_id} is already taken.')
+                    return # exit.
+            else:
+                raise ValueError(f'job_id {self.job_id} does not exist.')
             # get the paths
             self.src_paths = pd.DataFrame((ComputeTask.AssignedFiles() &
                                            dict(job_id = self.job_id)).fetch())
@@ -236,19 +243,32 @@ class BaseCompute():
         except Exception as err:
             # log the error
             print(f'There was an error processing job {self.job_id}.')
+            err =  str(traceback.format_exc()) + "ERROR" +str(err)
             print(err)
+
+            if len(err) > 1999: # then get only the last part of the error.
+                err = err[-1900:]
             self.set_job_status(job_status = 'FAILED',job_log = f'{err}')
             return
         self._post_compute() # so the rules can insert tables and all.
-        
-    def set_job_status(self, job_status = 'FAILED',job_log = '',job_waiting = 0):
+        # get the job from the DB if the status is not failed, mark completed (remember to clean the log)
+        from ..schema import ComputeTask
+        self.jobquery = (ComputeTask() & dict(job_id = self.job_id))
+        job_status = self.jobquery.fetch(as_dict = True)
+        if not job_status[0]['task_status'] in ['FAILED']:
+            self.set_job_status(job_status = 'COMPLETED')
+            
+    def set_job_status(self, job_status = None, job_log = None,job_waiting = 0):
         from ..schema import ComputeTask
         if not self.job_id is None:
-            ComputeTask.update1(dict(job_id = self.job_id,
-                                     task_waiting = job_waiting,
-                                     task_host = prefs['hostname'], # so we know where it failed.
-                                     task_status = job_status,
-                                     task_log = job_log))
+            dd = dict(job_id = self.job_id,
+                      task_waiting = job_waiting,
+                      task_host = prefs['hostname']) # so we know where it failed.)
+            if not job_status is None:
+                dd['task_status'] = job_status
+            if not job_log is None:
+                dd['task_log'] = job_log
+            ComputeTask.update1(dd)
             if not 'WORK' in job_status: # display the message
                 print(f'Check job_id {self.job_id} : {job_status}')
 

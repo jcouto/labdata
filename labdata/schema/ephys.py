@@ -203,8 +203,8 @@ class SpikeSorting(dj.Manual):
     sorting_datetime  = NULL          : datetime   # date of the spike sorting analysis
     channel_indices   = NULL          : longblob   # channel_map
     channel_coords    = NULL          : longblob   # channel_positions
-    -> [nullable] AnalysisFile.proj(features_file='file_path')
-    -> [nullable] AnalysisFile.proj(waveforms_file='file_path')
+    -> [nullable] AnalysisFile.proj(features_file='file_path',features_storage='storage')
+    -> [nullable] AnalysisFile.proj(waveforms_file='file_path',waveforms_storage='storage')
    '''
     # For each sorting, create a "features.hdf5" file that has the: (this file can be > 4Gb)
     #    - template features
