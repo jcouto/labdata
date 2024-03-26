@@ -131,6 +131,7 @@ class SpksCompute(BaseCompute):
             
             localfiles = self.get_files(dset, allowed_extensions = ['.ap.bin'])
             probepath = list(filter(lambda x: str(x).endswith('bin'),localfiles))
+            print(probepath)
             if self.parameters['algorithm_name'] == 'spks_kilosort2.5':      
                 from spks.sorting import ks25_run
                 results_folder = ks25_run(sessionfiles = probepath,
@@ -162,13 +163,11 @@ class SpksCompute(BaseCompute):
                 # delete results_folder
                 import shutil
                 shutil.rmtree(results_folder)
-                
-    def postprocess_and_insert(self,
-                               results_folder,
-                               probe_num,
-                               remove_duplicates = True,
-                               n_pre_samples = 45):
-        '''Does the preprocessing for a spike sorting and inserts'''
+
+    def prepare_results(self,results_folder,
+                        probe_num,
+                        remove_duplicates,
+                        n_pre_samples):
         from spks import Clusters
         if remove_duplicates:
             clu = Clusters(results_folder, get_waveforms = False, get_metrics = False)
@@ -192,39 +191,54 @@ class SpksCompute(BaseCompute):
         udict = [] # unit
         for iclu in clu.cluster_id:
             idx = np.where(clu.spike_clusters == iclu)[0]
-            udict.append(dict(base_key,unit_id = iclu,
-                              spike_positions = clu.spike_positions[idx,:].astype(np.float32),
-                              spike_times = clu.spike_times[idx].flatten().astype(np.uint64),
-                              spike_amplitudes = clu.spike_amplitudes[idx].flatten().astype(np.float32)))
-        
+            udict.append(dict(
+                base_key,unit_id = iclu,
+                spike_positions = clu.spike_positions[idx,:].astype(np.float32),
+                spike_times = clu.spike_times[idx].flatten().astype(np.uint64),
+                spike_amplitudes = clu.spike_amplitudes[idx].flatten().astype(np.float32)))
+            
         featurestosave = dict(template_features = clu.spike_pc_features.astype(np.float32),
                               spike_templates = clu.spike_templates,
                               cluster_indices = clu.spike_clusters,
                               whitening_matrix = clu.whitening_matrix,
                               templates = clu.templates,
                               template_feature_ind = clu.template_pc_features_ind)
+        return clu,base_key,ssdict, udict, featurestosave
+           
+    def postprocess_and_insert(self,
+                               results_folder,
+                               probe_num,
+                               remove_duplicates = True,
+                               n_pre_samples = 45):
+        '''Does the preprocessing for a spike sorting and inserts'''
+        # get the results in a dictionary and remove duplicates
+        clu,base_key,ssdict, udict, featurestosave = self.prepare_results(results_folder,
+                                                                          probe_num,
+                                                                          remove_duplicates,
+                                                                          n_pre_samples)
         # save the features to a file, will take like 2 min
         save_dict_to_h5(Path(results_folder)/'features.hdf5',featurestosave)
         n_jobs = DEFAULT_N_JOBS  # gets the default number of jobs from labdata
-        # extract the waveforms 
-        udict = select_random_waveforms(udict, wpre = n_pre_samples, wpost = n_pre_samples)
-        from tqdm import tqdm
-        binaryfile = list(Path(results_folder).glob("filtered_recording*.bin"))[0]
-        nchannels = clu.metadata['nchannels'] 
-        res = get_waveforms_from_binary(binaryfile, nchannels, [u['waveform_indices'] for u in udict],
-                                        wpre = n_pre_samples,
-                                        wpost = n_pre_samples,
-                                        n_jobs = n_jobs)
-        
+        # extract the waveforms from the binary file
+        udict, binaryfile, nchannels,res = self.extract_waveforms(udict,
+                                                                  clu,
+                                                                  results_folder,
+                                                                  n_pre_samples,
+                                                                  n_jobs)
         # utemp = get_waveforms_from_binary(binaryfile,nchannels,[u['waveform_indices'] for u in udict])
+        def median_waves(r,gains):
+            if not r is None:
+                return np.median(r.astype(np.float32),axis = 0)*gains
+            else:
+                return None
         median_waveforms = Parallel(backend='loky', n_jobs = n_jobs)(
-            delayed(lambda x: np.median(x.astype(np.float32),axis = 0))(r) for r in tqdm(res))
+            delayed(median_waves)(r,gains = clu.channel_gains) for r in tqdm(res))
         tosave = {}
         waves_dict = []
         for u,w,m in zip(udict,res,median_waveforms):
             waves_dict.append(dict(base_key,
                                    unit_id = u['unit_id'],
-                                   waveform_median = m*clu.channel_gains))
+                                   waveform_median = m))
             tosave[str(u['unit_id'])] = dict(waveforms = w, indices = u['waveform_indices'])
         # this takes roughly 7 min per dataset because of the compression...
         save_dict_to_h5(Path(results_folder)/'waveforms.hdf5',tosave) 
@@ -284,6 +298,19 @@ class SpksCompute(BaseCompute):
                                           segment = np.array(dat[offset_samples : offset_samples + nsamples])))
         del dat
         self.set_job_status(job_log = f'Completed {base_key}')
+
+        # extract the waveforms
+    def extract_waveforms(self,udict, clu, results_folder,n_pre_samples,n_jobs):
+        udict = select_random_waveforms(udict, wpre = n_pre_samples, wpost = n_pre_samples)
+        from tqdm import tqdm
+        binaryfile = list(Path(results_folder).glob("filtered_recording*.bin"))[0]
+        nchannels = clu.metadata['nchannels'] 
+        res = get_waveforms_from_binary(binaryfile, nchannels,
+                                        [u['waveform_indices'] for u in udict],
+                                        wpre = n_pre_samples,
+                                        wpost = n_pre_samples,
+                                        n_jobs = n_jobs)
+        return udict, binaryfile, nchannels,res
         
 def select_random_waveforms(unit_dict,
                             wpre = 45,
@@ -312,7 +339,10 @@ def get_spike_waveforms(data,indices,wpre = 45,wpost = 45):
     waves = []
     for i in indices.astype(np.int64):
         waves.append(np.array(np.take(data,idx+i,axis = 0)))
-    return np.stack(waves,dtype = data.dtype)
+    if len(waves):
+        return np.stack(waves,dtype = data.dtype)
+    else:
+        return None
 
 def get_waveforms_from_binary(binary_file,
                               binary_file_nchannels,

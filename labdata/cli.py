@@ -66,21 +66,38 @@ Server commands (don't run on experimental computers):
         args = parser.parse_args(argum)
         from .compute import parse_analysis
         # parse analysis will check if the analysis is defined
-        jobids,container,cuda = parse_analysis(analysis = args.analysis,
-                                               job_id = args.job, 
-                                               subject = args.subject,
-                                               session = args.session,
-                                               datatype = args.datatype,
-                                               secondary_args = secondary_args,
-                                               full_command = ' '.join(sys.argv[1:]))
+        jobids,container,cuda,name = parse_analysis(analysis = args.analysis,
+                                                    job_id = args.job, 
+                                                    subject = args.subject,
+                                                    session = args.session,
+                                                    datatype = args.datatype,
+                                                    secondary_args = secondary_args,
+                                                    full_command = ' '.join(sys.argv[1:]))
         from .compute.singularity import run_on_singularity
-        print(container,jobids,cuda)
         container_file = (Path(prefs['compute']['containers']['local'])/container).with_suffix('.sif')
-        print(container_file)
-        if container_file.exists():
-            for j in jobids:
-                run_on_singularity(container_file,command = f'labdata2 task {j}', cuda = cuda, bind_from_prefs = True)
-
+        cmds = []
+        for j in jobids:
+            if container_file.exists():
+                cmds.append(run_on_singularity(container_file,command = f'labdata2 task {j}',
+                                               cuda = cuda,
+                                               bind_from_prefs = True,
+                                               dry_run = True))
+            else:
+                cmds.append(f'labdata2 task {j}')
+        print(args.target,cmds)
+        if args.target == 'slurm':
+            from .compute.schedulers import slurm_exists,slurm_submit
+            if slurm_exists():
+                for cmd in cmds:
+                    slurm_submit(name,
+                                 cmd,
+                                 ntasks = 1,
+                                 ncpuspertask = DEFAULT_N_JOBS, # change later
+                                 gpus = 1 if cuda else None)
+            else:
+                print('Could not find SLURM: did not submit compute tasks:')
+                print('\t\n'.join(cmds))
+            
     def task(self):
         parser = argparse.ArgumentParser(
             description = 'Runs a ComputeTask',

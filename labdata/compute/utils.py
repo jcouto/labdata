@@ -43,7 +43,7 @@ def parse_analysis(analysis, job_id = None,
         datasets = obj.find_datasets(subject_name = subject,session_name = session)        
         job_ids = obj.place_tasks_in_queue(datasets,task_cmd = full_command)
         # now we have the job ids, need to figure out how to launch the jobs
-        return job_ids,obj.container,obj.cuda # returns the name of the container to use and the job ids
+        return job_ids,obj.container,obj.cuda, obj.name # returns the name of the container to use and the job ids
         
 # this class will execute compute jobs, it should be independent from the CLI but work with it.
 class BaseCompute():
