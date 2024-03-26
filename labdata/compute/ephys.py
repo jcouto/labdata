@@ -2,18 +2,19 @@ from ..utils import *
 from .utils import BaseCompute
 
 class SpksCompute(BaseCompute):
+    container = 'labdata_spks'
+    name = 'spks'
+    url = 'http://github.com/spkware/spks'
     def __init__(self,job_id, allow_s3 = None,**kwargs):
         super(SpksCompute,self).__init__(job_id, allow_s3 = None)
-        self.container = 'labdata_kilosort2_5'
-        self.name = 'spks'
-        self.url = 'http://github.com/spkware/spks'
         self.file_filters = ['.ap.']
+        # default parameters
         self.parameters = dict(algorithm_name = 'spks_kilosort2.5',
                                motion_correction = True,
                                low_pass = 300.,
                                high_pass = 13000.,
                                thresholds = [9.,3.])
-        self.parameter_set_num = None # identifier in EphysAnalysisParams
+        self.parameter_set_num = None # identifier in SpikeSortingParams
         self._init_job()
         if not self.job_id is None:
             self.add_parameter_key()

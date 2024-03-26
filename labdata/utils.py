@@ -51,16 +51,19 @@ default_labdata_preferences = dict(local_paths = [str(Path.home()/'data')],
                                    path_rules='{subject_name}/{session_name}/{dataset_name}', # to read the session/dataset from a path
                                    queues= None,
                                    allow_s3_download = False,
-                                   compute = dict(aws=dict(access_key = None,
-                                                           secret_key = None,
-                                                           region = 'us-west-2',
-                                                           # check the instructions for how to create the AMI
-                                                           image_ids = dict(linux = dict(ami = 'ami-0a1aa46f0630cf2c4', 
-                                                                                         user = 'ubuntu')),
-                                                           access_key_folder = str(Path.home()/Path('labdata')/'ec2keys')),
-                                                  containers = dict(local_path = str(Path.home()/Path('labdata')/'containers')),
-                                                  analysis = analysis,
-                                                  default_target = 'slurm'),
+                                   compute = dict(
+                                       aws=dict(access_key = None,
+                                                secret_key = None,
+                                                region = 'us-west-2',
+                                                # check the instructions for how to create the AMI
+                                                image_ids = dict(linux = dict(ami = 'ami-0a1aa46f0630cf2c4', 
+                                                                              user = 'ubuntu')),
+                                                access_key_folder = str(Path.home()/Path('labdata')/'ec2keys')),
+                                       containers = dict(
+                                           local = str(Path.home()/Path('labdata')/'containers'),
+                                           storage = 'analysis'), # place to store on s3
+                                       analysis = analysis,
+                                       default_target = 'slurm'),
                                    storage = dict(ucla_data = dict(protocol = 's3',
                                                                    endpoint = 's3.amazonaws.com:9000',
                                                                    bucket = 'churchland-ucla-data',
