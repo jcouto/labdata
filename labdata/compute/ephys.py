@@ -19,7 +19,8 @@ class SpksCompute(BaseCompute):
         self._init_job()
         if not self.job_id is None:
             self.add_parameter_key()
-
+        self.delete_results = delete_results
+        
     def add_parameter_key(self):
         parameter_set_num = None
         from ..schema import SpikeSorting, SpikeSortingParams, EphysRecording, DatasetEvents
