@@ -34,7 +34,7 @@ labdata2 = "labdata.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."] 
-include = ["labdata"]
+include = ["labdata","labdata.compute","labdata.schema","labdata.rules"]
 namespaces = false  # disable PEP 420 namespaces
 
 [tool.setuptools.dynamic]

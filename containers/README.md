@@ -1,3 +1,8 @@
+### Compile the singularity containers
+
+``singularity build --fakeroot container_spks.sif container_spks.def``
+
+
 ### Create an AMI for running containers
 
 Launch the Ubuntu AMI from the console and ssh into it.
