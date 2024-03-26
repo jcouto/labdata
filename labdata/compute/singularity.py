@@ -1,9 +1,4 @@
 from ..utils import *
-try:
-    import spython
-except:
-    print("You'll need to install singularity-python:")
-    print("     pip install spython")
 
 def build_singularity_container(definition_file,
                                 force = False,
@@ -18,6 +13,12 @@ def build_singularity_container(definition_file,
 
     Joao Couto - labdata 2024
     '''
+
+    try:
+        import spython
+    except:
+        print("You'll need to install singularity-python:")
+        print("     pip install spython")
 
     if output_folder is None:
         output_folder = prefs['compute_containers']['local_path']
@@ -42,9 +43,23 @@ def build_singularity_container(definition_file,
 
     return image
 
-def run_on_singularity(container, command, cuda = False):
-    from spython.main import Client
-    containerfile = Path(prefs['compute_containers']['local_path'])/'labdata-kilosort2_5.sif'
-    if containerfile.exists():
-        client = Client.execute(image = containerfile, command = 'nvidia-smi', nv=True)
+def run_on_singularity(containerfile, command, cuda = False, bind = [], bind_from_prefs = False, dry_run = False):
+    import subprocess as sub # run this 
+    nv = ''
+    if cuda:
+        nv = '--nv'
+    bind_str = ''
+    for b in bind:
+        bind_str += ' --bind {b}'
+    if bind_from_prefs:
+        local_paths = prefs['local_paths']
+        for p in local_paths:
+            bind_str += f' --bind {p}:{p}'
+        p = prefs['scratch_path']
+        bind_str += f' --bind {p}:{p}'
+    cmd = f"singularity exec {nv} {bind_str} {containerfile} {command}"
+    if not dry_run:
+        sub.run(cmd,shell = True)
+    else:
+        return cmd
     

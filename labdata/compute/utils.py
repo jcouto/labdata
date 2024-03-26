@@ -39,26 +39,26 @@ def parse_analysis(analysis, job_id = None,
         if len(submittedjobs):
             print('A similar job is already submitted:')
             #print(submittedjobs)
-            return
+            return [],'',None
         datasets = obj.find_datasets(subject_name = subject,session_name = session)        
         job_ids = obj.place_tasks_in_queue(datasets,task_cmd = full_command)
         # now we have the job ids, need to figure out how to launch the jobs
-        print(job_ids)
-    print(obj)
+        return job_ids,obj.container,obj.cuda # returns the name of the container to use and the job ids
         
 # this class will execute compute jobs, it should be independent from the CLI but work with it.
 class BaseCompute():
+    name = None
+    container = 'labdata-base'
+    cuda = False
     def __init__(self,job_id, allow_s3 = None):
         '''
         Executes a computation on a dataset, that can be remote or local
         Uses a singularity image if possible
         '''
-        self.name = 'computejob'
         self.file_filters = ['.'] # selects all files...
         self.parameters = dict()
         
         self.job_id = job_id
-        self.container = 'labdata-base'
         if not self.job_id is None:
             self._check_if_taken()
             
@@ -194,6 +194,7 @@ class BaseCompute():
     def run_on_container(self):
         # this should just start a container and run the same command that was used to run this on the CLI
         pass
+    
     def run_on_ec2(self):
         # this has to:
         #   1. start an instance
@@ -269,8 +270,9 @@ class BaseCompute():
             if not job_log is None:
                 dd['task_log'] = job_log
             ComputeTask.update1(dd)
-            if not 'WORK' in job_status: # display the message
-                print(f'Check job_id {self.job_id} : {job_status}')
+            if not job_status is None:
+                if not 'WORK' in job_status: # display the message
+                    print(f'Check job_id {self.job_id} : {job_status}')
 
     def _post_compute(self):
         '''

@@ -3,9 +3,10 @@ from .utils import BaseCompute
 
 class SpksCompute(BaseCompute):
     container = 'labdata_spks'
+    cuda = True
     name = 'spks'
     url = 'http://github.com/spkware/spks'
-    def __init__(self,job_id, allow_s3 = None,**kwargs):
+    def __init__(self,job_id, allow_s3 = None, delete_results = True, **kwargs):
         super(SpksCompute,self).__init__(job_id, allow_s3 = None)
         self.file_filters = ['.ap.']
         # default parameters
@@ -156,6 +157,10 @@ class SpksCompute(BaseCompute):
                                         probe_num = probe_num,
                                         remove_duplicates = True,
                                         n_pre_samples = 45)
+            if self.delete_results:
+                # delete results_folder
+                import shutil
+                shutil.rmtree(results_folder)
                 
     def postprocess_and_insert(self,
                                results_folder,

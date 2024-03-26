@@ -8,17 +8,17 @@ class CLI_parser():
             usage = ''' labdata <command> [args]
 Data manipulation commands are:
 
-            subjects                            list subjects
-            sessions -a <subject>               list sessions 
-            get -a <subject> -s <session>       download data from one session if not already there
-            put -a <subject> -s <session>       copies a dataset to the server to be used
-            clean                               deletes files that are already added
+            subjects                            List subjects
+            sessions -a <subject>               List sessions 
+            get -a <subject> -s <session>       Download data from one session if not already there
+            put -a <subject> -s <session>       Copies a dataset to the server to be used
+            clean                               Deletes files that are already added
 
 Data analysis commands:
 
-            run <analysis> -a <subject> -s <session>        Runs an analysis, local, queued or on AWS
-            job <analysis> -a <subject> -s <session>        Allocate an analysis, does not run
-
+            run <analysis> -a <subject> -s <session>        Allocates and runs analysis, local, queued or on AWS
+            task <compute_task_number>                      
+            
 Server commands (don't run on experimental computers):
             upload                                          Sends pending data to S3 (applies upload rules)
             ''')
@@ -56,8 +56,8 @@ Server commands (don't run on experimental computers):
         parser.add_argument('analysis',action = 'store',default = '',type = str)
         parser.add_argument('-j','--job',action = 'store',default = None, type = int)
         parser.add_argument('-t','--target',action = 'store',default = prefs['compute']['default_target'], type = str)
+        
         parser = self._add_default_arguments(parser)
-
         secondary_args = None
         argum = sys.argv[2:]
         if '--' in sys.argv:
@@ -66,13 +66,20 @@ Server commands (don't run on experimental computers):
         args = parser.parse_args(argum)
         from .compute import parse_analysis
         # parse analysis will check if the analysis is defined
-        parse_analysis(analysis = args.analysis,
-                       job_id = args.job, # this will become un-used.
-                       subject = args.subject,
-                       session = args.session,
-                       datatype = args.datatype,
-                       secondary_args = secondary_args,
-                       full_command = ' '.join(sys.argv[1:]))
+        jobids,container,cuda = parse_analysis(analysis = args.analysis,
+                                               job_id = args.job, 
+                                               subject = args.subject,
+                                               session = args.session,
+                                               datatype = args.datatype,
+                                               secondary_args = secondary_args,
+                                               full_command = ' '.join(sys.argv[1:]))
+        from .compute.singularity import run_on_singularity
+        print(container,jobids,cuda)
+        container_file = (Path(prefs['compute']['containers']['local'])/container).with_suffix('.sif')
+        print(container_file)
+        if container_file.exists():
+            for j in jobids:
+                run_on_singularity(container_file,command = f'labdata2 task {j}', cuda = cuda, bind_from_prefs = True)
 
     def task(self):
         parser = argparse.ArgumentParser(
