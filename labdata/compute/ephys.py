@@ -240,7 +240,11 @@ class SpksCompute(BaseCompute):
             waves_dict.append(dict(base_key,
                                    unit_id = u['unit_id'],
                                    waveform_median = m))
-            tosave[str(u['unit_id'])] = dict(waveforms = w, indices = u['waveform_indices'])
+            if not w is None:
+                tosave[str(u['unit_id'])] = dict(waveforms = w,
+                                                 indices = u['waveform_indices'])
+            else:
+                print(f"Unit {u['unit_id']} had no spikes extracted")
         # this takes roughly 7 min per dataset because of the compression...
         save_dict_to_h5(Path(results_folder)/'waveforms.hdf5',tosave) 
 
