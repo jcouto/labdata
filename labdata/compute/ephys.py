@@ -244,9 +244,11 @@ class SpksCompute(BaseCompute):
         # this takes roughly 7 min per dataset because of the compression...
         save_dict_to_h5(Path(results_folder)/'waveforms.hdf5',tosave) 
 
+        stream_name = f'imec{probe_num}' # to save the events and files
+        
         src = [Path(results_folder)/'waveforms.hdf5',Path(results_folder)/'features.hdf5']
         dataset = dict(**self.dataset_key)
-        dataset['dataset_name'] = f'spike_sorting/{self.parameter_set_num}'
+        dataset['dataset_name'] = f'spike_sorting/{stream_name}/{self.parameter_set_num}'
         from ..schema import AnalysisFile
         filekeys = AnalysisFile().upload_files(src,dataset)
         ssdict['waveforms_file'] = filekeys[0]['file_path']
@@ -255,7 +257,6 @@ class SpksCompute(BaseCompute):
         ssdict['features_storage'] = filekeys[1]['storage']
         # insert the syncs
         events = []
-        stream_name = f'imec{probe_num}'
         for c in clu.metadata.keys():
             if 'sync_onsets' in c:
                 for k in clu.metadata[c].keys():
