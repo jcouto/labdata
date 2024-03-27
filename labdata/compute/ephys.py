@@ -7,6 +7,13 @@ class SpksCompute(BaseCompute):
     name = 'spks'
     url = 'http://github.com/spkware/spks'
     def __init__(self,job_id, allow_s3 = None, delete_results = True, **kwargs):
+        '''
+#1) find the files
+#2) copy just the file you need to scratch
+#3) run spike sorting on that file/folder
+#4) delete the raw files
+#5) repeat until all probes are processed.
+        '''
         super(SpksCompute,self).__init__(job_id, allow_s3 = None)
         self.file_filters = ['.ap.']
         # default parameters
@@ -237,10 +244,10 @@ class SpksCompute(BaseCompute):
         tosave = {}
         waves_dict = []
         for u,w,m in zip(udict,res,median_waveforms):
-            waves_dict.append(dict(base_key,
-                                   unit_id = u['unit_id'],
-                                   waveform_median = m))
             if not w is None:
+                waves_dict.append(dict(base_key,
+                                       unit_id = u['unit_id'],
+                                       waveform_median = m))
                 tosave[str(u['unit_id'])] = dict(waveforms = w,
                                                  indices = u['waveform_indices'])
             else:
