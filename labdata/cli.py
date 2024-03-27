@@ -31,6 +31,29 @@ Server commands (don't run on experimental computers):
             exit(1)
         getattr(self,args.command)()  # Runs the following parser
 
+    def sessions(self):
+        parser = argparse.ArgumentParser(
+            description = 'List sessions and datatypes',
+            usage = '''labdata sessions -a <SUBJECT>''')
+        parser = self._add_default_arguments(parser,1)
+            
+        args = parser.parse_args(sys.argv[2:])
+        from .schema import Subject, Session, Dataset
+        for s in args.subject:
+            subject_name = s
+            datasets = pd.DataFrame((Dataset()*Session() &
+                                     dict(subject_name = subject_name)).fetch())
+            sessions = np.sort(np.unique(datasets.session_datetime.values))
+            print(f'\n {s} - {len(sessions)} sessions - {len(datasets)} datasets')
+            for ses in sessions:
+                dsets = datasets[datasets.session_datetime == ses]
+                print(f'\t {dsets.iloc[0].session_name}')
+                for i,t in dsets.iterrows():
+                    if t.dataset_type is None:
+                        print(f'\t\t *{t.dataset_name}')
+                    else:
+                        print(f'\t\t {t.dataset_type} - {t.dataset_name}')
+                        
     def put(self):
         parser = argparse.ArgumentParser(
             description = 'Copies data to the server to be uploaded',
@@ -84,7 +107,6 @@ Server commands (don't run on experimental computers):
                                                dry_run = True))
             else:
                 cmds.append(f'labdata2 task {j}')
-        print(args.target,cmds)
         if args.target == 'slurm':
             from .compute.schedulers import slurm_exists,slurm_submit
             if slurm_exists():
@@ -110,14 +132,18 @@ Server commands (don't run on experimental computers):
             task = handle_compute(job_id)
             task.compute()
         
-    def _add_default_arguments(self, parser):
-        parser.add_argument('-a','--subject',
-                            action='store',
-                            default=None, type=str,nargs='+')
-        parser.add_argument('-s','--session',
-                            action='store',
-                            default=None, type=str,nargs='+')
-        parser.add_argument('-d','--datatype',
+    def _add_default_arguments(self, parser,level = 3):
+        if level >= 1:
+            parser.add_argument('-a','--subject',
+                                action='store',
+                                default=None, type=str,nargs='+')
+        if level >= 2:
+
+            parser.add_argument('-s','--session',
+                                action='store',
+                                default=None, type=str,nargs='+')
+        if level >= 3:
+            parser.add_argument('-d','--datatype',
                             action='store',
                             default=None, type=str,nargs='+')
         return parser
