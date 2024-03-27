@@ -231,6 +231,7 @@ class SpksCompute(BaseCompute):
                 return np.median(r.astype(np.float32),axis = 0)*gains
             else:
                 return None
+        from tqdm import tqdm
         median_waveforms = Parallel(backend='loky', n_jobs = n_jobs)(
             delayed(median_waves)(r,gains = clu.channel_gains) for r in tqdm(res))
         tosave = {}
